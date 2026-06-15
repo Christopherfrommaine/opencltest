@@ -49,11 +49,8 @@ static void print_build_log(cl_program program, cl_device_id device) {
 int main(void) {
     cl_int err;
 
-    const unsigned int start = 1;
-    const unsigned int count = 1000000000;
-
     const uint64_t min = 0;
-    const uint64_t max = 1000 * 1000000;
+    const uint64_t max = 1000 * 1000 * 1000;
 
     // Maximum number to be retured
     const uint64_t max_matches = 0.01 * (max - min);
@@ -117,11 +114,11 @@ int main(void) {
                                         NULL, &err);
     CHECK_CL(err, "clCreateBuffer matches");
 
-    uint64_t zero = 0;
+    uint32_t zero = 0;
     cl_mem count_buf = clCreateBuffer(context,
-                                      CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-                                      sizeof(uint64_t),
-                                      &zero, &err);
+                                    CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+                                    sizeof(uint32_t),
+                                    &zero, &err);
     CHECK_CL(err, "clCreateBuffer count");
 
     err = clSetKernelArg(kernel, 0, sizeof(uint64_t), &min);
@@ -154,7 +151,7 @@ int main(void) {
                               0, NULL, NULL);
     CHECK_CL(err, "read count");
 
-    printf("Raw match count reported: %u\n", match_count);
+    printf("Raw match count reported: %u / %lu\n", match_count, max_matches);
 
     uint64_t to_read = match_count;
     if (to_read > max_matches) {
@@ -175,9 +172,30 @@ int main(void) {
         CHECK_CL(err, "read matches");
     }
 
+    uint64_t num_deduped = 0;
+    uint64_t *matches_deduped = calloc(to_read, sizeof(uint64_t));
+
     for (uint64_t i = 0; i < to_read; ++i) {
-        printf("%lu\n", matches[i]);
+        uint64_t elem = matches[i];
+        int seen = 0;
+
+        for (uint64_t j = 0; j < num_deduped; ++j) {
+            if (elem == matches_deduped[j]) {
+                seen = 1;
+                break;
+            }
+        }
+
+        if (!seen) {
+            matches_deduped[num_deduped++] = elem;
+        }
     }
+
+    for (uint64_t i = 0; i < num_deduped; ++i) {
+        printf("%lu, \n", matches_deduped[i]);
+    }
+
+    printf("Raw match count reported: %u / %lu (%f) (%f)\n", match_count, max_matches, ((float)(match_count))/((float)(max_matches)), ((float)(match_count))/((float)(max - min)));
 
     free(matches);
     free(source);
