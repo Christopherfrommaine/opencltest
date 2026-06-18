@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O2 -Wall -Wextra -std=c11
+CFLAGS = -O0 -Wall -Wextra -std=c11 -g
 LDFLAGS = -lOpenCL
 
 TARGET = main

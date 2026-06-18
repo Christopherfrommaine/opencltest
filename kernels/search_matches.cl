@@ -1,6 +1,6 @@
 #define steps1 100
-#define steps2 200
-#define steps3 200
+#define steps2 100
+#define steps3 300
 
 #define topmostbitsmask 0xE000000000000000
 
@@ -15,6 +15,7 @@ __kernel void search_matches(const ulong min,
         return;
     }
 
+    
     ulong n = min + (ulong)gid;
     int is_match = 1;
 
@@ -39,7 +40,7 @@ __kernel void search_matches(const ulong min,
     ulong accum = o;
     ulong minim = o;
 
-    while (o != 0 && count < steps2 && accum != 0 && ((topmostbitsmask & o) == 0)) {
+    while (o != 0 && count < steps3 && accum != 0 && ((topmostbitsmask & o) == 0)) {
         count++;
         ulong a = o << 3;
         ulong b = o << 2;
@@ -52,6 +53,11 @@ __kernel void search_matches(const ulong min,
         accum = accum ^ o;
         
         if (o < minim) {minim = o;}
+
+        if (count < steps2) {
+            minim = o;
+            accum = o;
+        }
     }
 
     if (o == 0) {return;}

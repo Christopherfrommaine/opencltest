@@ -5,7 +5,7 @@
 
 #define CHECK_CL(err, msg) \
     do { \
-        if ((err) != CL_SUCCESS) { \
+        if ((err) != CL_SUCCESS) {
             fprintf(stderr, "%s failed with OpenCL error %d\n", (msg), (err)); \
             exit(EXIT_FAILURE); \
         } \
@@ -46,14 +46,20 @@ static void print_build_log(cl_program program, cl_device_id device) {
     free(log);
 }
 
+// #define KERNELFILE "kernels/search_matches.cl"
+#define KERNELFILE "kernels/v4.cl"
+
 int main(void) {
     cl_int err;
 
+    const uint64_t million = 1000 * 1000;
+    const uint64_t billion = 1000 * 1000 * 1000;
+
     const uint64_t min = 0;
-    const uint64_t max = 1000 * 1000 * 1000;
+    const uint64_t max = 1 * billion;
 
     // Maximum number to be retured
-    const uint64_t max_matches = 0.01 * (max - min);
+    const uint64_t max_matches = 1 + 0.0005 * (max - min);
 
     cl_uint num_platforms = 0;
     err = clGetPlatformIDs(0, NULL, &num_platforms);
@@ -78,7 +84,7 @@ int main(void) {
     char device_name[256];
     err = clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_name), device_name, NULL);
     CHECK_CL(err, "clGetDeviceInfo");
-    printf("Using device: %s\n", device_name);
+    fprintf(stderr, "Using device: %s\n", device_name);
 
     cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
     CHECK_CL(err, "clCreateContext");
@@ -87,7 +93,7 @@ int main(void) {
     CHECK_CL(err, "clCreateCommandQueue");
 
     size_t source_size;
-    char *source = read_file("kernels/search_matches.cl", &source_size);
+    char *source = read_file(KERNELFILE, &source_size);
     if (!source) {
         fprintf(stderr, "Could not read kernel file\n");
         return 1;
@@ -151,12 +157,12 @@ int main(void) {
                               0, NULL, NULL);
     CHECK_CL(err, "read count");
 
-    printf("Raw match count reported: %u / %lu\n", match_count, max_matches);
+    fprintf(stderr, "Raw match count reported: %u / %lu\n", match_count, max_matches);
 
     uint64_t to_read = match_count;
     if (to_read > max_matches) {
         to_read = max_matches;
-        printf("WARNING: output buffer overflowed; truncated to %lu matches\n", max_matches);
+        fprintf(stderr, "WARNING: output buffer overflowed; truncated to %lu matches\n", max_matches);
     }
 
     uint64_t *matches = malloc(sizeof(uint64_t) * to_read);
@@ -172,30 +178,13 @@ int main(void) {
         CHECK_CL(err, "read matches");
     }
 
-    uint64_t num_deduped = 0;
-    uint64_t *matches_deduped = calloc(to_read, sizeof(uint64_t));
-
-    for (uint64_t i = 0; i < to_read; ++i) {
-        uint64_t elem = matches[i];
-        int seen = 0;
-
-        for (uint64_t j = 0; j < num_deduped; ++j) {
-            if (elem == matches_deduped[j]) {
-                seen = 1;
-                break;
-            }
-        }
-
-        if (!seen) {
-            matches_deduped[num_deduped++] = elem;
-        }
+    printf("{");
+    for (uint64_t i = 0; i < match_count; ++i) {
+        printf("%lu, \n", matches[i]);
     }
+    printf("0}");
 
-    for (uint64_t i = 0; i < num_deduped; ++i) {
-        printf("%lu, \n", matches_deduped[i]);
-    }
-
-    printf("Raw match count reported: %u / %lu (%f) (%f)\n", match_count, max_matches, ((float)(match_count))/((float)(max_matches)), ((float)(match_count))/((float)(max - min)));
+    fprintf(stderr, "Raw match count reported: %u / %lu (%f) (%f)\n", match_count, max_matches, ((float)(match_count))/((float)(max_matches)), ((float)(match_count))/((float)(max - min)));
 
     free(matches);
     free(source);
