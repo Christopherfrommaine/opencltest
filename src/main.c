@@ -1,4 +1,8 @@
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
 #include <CL/cl.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -125,7 +129,7 @@ int main(void) {
     const uint64_t trillion = 1000ULL * billion;
 
     const uint64_t min = 0ULL * billion;
-    const uint64_t max = 112ULL * billion;
+    const uint64_t max = 1ULL * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.0001 * (max - min);

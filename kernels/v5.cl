@@ -5,10 +5,13 @@
 #define STEPS5 300
 #define STEPS6 300
 
-// inline uint ctz(const ulong x)
+// inline uint ctz(ulong x)
 // {
-//     if (x == 0) {return 64;}
-//     return 63u - clz(x & -x);
+//     if (x == 0UL) {
+//         return 64u;
+//     }
+
+//     return (uint)(63u - clz(x & (~x + 1UL)));
 // }
 
 #define printf(...) (void)0
