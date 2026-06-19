@@ -2,10 +2,77 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+
+typedef struct {
+    uint64_t *slots;
+    size_t capacity; // must be a power of 2
+    size_t size;
+} HashSet;
+
+static uint64_t hash_u64(uint64_t x) {
+    x ^= x >> 30;
+    x *= UINT64_C(0xbf58476d1ce4e5b9);
+    x ^= x >> 27;
+    x *= UINT64_C(0x94d049bb133111eb);
+    x ^= x >> 31;
+    return x;
+}
+
+unsigned int next_power_of_2(unsigned int n) {
+    if (n <= 1) return 1;
+
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    return n + 1;
+}
+
+bool hashset_init(HashSet *set, size_t capacity) {
+    // capacity should be a power of 2
+    set->slots = calloc(capacity, sizeof(uint64_t));
+    if (!set->slots) return false;
+
+    set->capacity = capacity;
+    set->size = 0;
+    return true;
+}
+
+void hashset_free(HashSet *set) {
+    free(set->slots);
+    set->slots = NULL;
+    set->capacity = 0;
+    set->size = 0;
+}
+
+bool hashset_insert(HashSet *set, uint64_t value) {
+    // value must not be 0
+    uint64_t h = hash_u64(value);
+    size_t mask = set->capacity - 1;
+    size_t i = h & mask;
+
+    while (true) {
+        if (set->slots[i] == 0) {
+            set->slots[i] = value;
+            set->size++;
+            return true; // newly inserted
+        }
+
+        if (set->slots[i] == value) {
+            return false; // already present
+        }
+
+        i = (i + 1) & mask; // linear probing
+    }
+}
 
 #define CHECK_CL(err, msg) \
     do { \
-        if ((err) != CL_SUCCESS) {
+        if ((err) != CL_SUCCESS) { \
             fprintf(stderr, "%s failed with OpenCL error %d\n", (msg), (err)); \
             exit(EXIT_FAILURE); \
         } \
@@ -47,19 +114,21 @@ static void print_build_log(cl_program program, cl_device_id device) {
 }
 
 // #define KERNELFILE "kernels/search_matches.cl"
-#define KERNELFILE "kernels/v4.cl"
+#define KERNELFILE "kernels/v5.cl"
 
 int main(void) {
     cl_int err;
 
-    const uint64_t million = 1000 * 1000;
-    const uint64_t billion = 1000 * 1000 * 1000;
+    const uint64_t thousand = 1000ULL;
+    const uint64_t million = 1000ULL * thousand;
+    const uint64_t billion = 1000ULL * million;
+    const uint64_t trillion = 1000ULL * billion;
 
-    const uint64_t min = 0;
-    const uint64_t max = 1 * billion;
+    const uint64_t min = 0ULL * billion;
+    const uint64_t max = 112ULL * billion;
 
     // Maximum number to be retured
-    const uint64_t max_matches = 1 + 0.0005 * (max - min);
+    const uint64_t max_matches = 100000 + 0.0001 * (max - min);
 
     cl_uint num_platforms = 0;
     err = clGetPlatformIDs(0, NULL, &num_platforms);
@@ -178,13 +247,28 @@ int main(void) {
         CHECK_CL(err, "read matches");
     }
 
+                // uint64_t oOrig = matches[i];
+            // if (oOrig == 222678959859ULL || oOrig == 595703ULL || oOrig == 610999ULL) {
+            //     printf("out: %lu\n", oOrig);
+            // }
+
+    HashSet seen;
+    if (!hashset_init(&seen, next_power_of_2(1.2 * max_matches))) {
+        return 1;
+    }
+
+    int num_deduped = 0;
     printf("{");
     for (uint64_t i = 0; i < match_count; ++i) {
-        printf("%lu, \n", matches[i]);
+        if (matches[i] != 0 && hashset_insert(&seen, matches[i])) {
+            printf("%lu, \n", matches[i]);
+            num_deduped++;
+        }
     }
+    hashset_free(&seen);
     printf("0}");
 
-    fprintf(stderr, "Raw match count reported: %u / %lu (%f) (%f)\n", match_count, max_matches, ((float)(match_count))/((float)(max_matches)), ((float)(match_count))/((float)(max - min)));
+    fprintf(stderr, "Raw match count reported: %u / %lu (%f) | Deduped: %u | (%f)\n", match_count, max_matches, ((float)(match_count))/((float)(max_matches)), num_deduped, ((float)(match_count))/((float)(max - min)));
 
     free(matches);
     free(source);
