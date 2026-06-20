@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -O0 -Wall -Wextra -std=c11 -g
+# CFLAGS += -I$(HOME)/gpu/OpenCL/OpenCLHeaders -L/orcd/software/core/001/pkg/cuda/13.0.1/targets/x86_64-linux/lib/
 
 TARGET = main
 SRC = src/main.c
