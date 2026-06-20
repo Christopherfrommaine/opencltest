@@ -5,6 +5,8 @@
 #define STEPS5 300
 #define STEPS6 300
 
+#define RETVAL minim
+
 // inline uint ctz(ulong x)
 // {
 //     if (x == 0UL) {
@@ -129,7 +131,7 @@ __kernel void search_matches(const ulong min_i,
     ulong o = (n << 1) | 1;
     ulong oOrig = o;
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("1 %lu\n", o);
     }
     
@@ -147,7 +149,7 @@ __kernel void search_matches(const ulong min_i,
         o = o >> (((o & 0xF) == 0) << 2);
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("  steps1 used: %u\n", count);
     }
 
@@ -155,7 +157,7 @@ __kernel void search_matches(const ulong min_i,
 
     if (o < oOrig) {return;}
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("2 %lu\n", o);
     }
 
@@ -178,31 +180,56 @@ __kernel void search_matches(const ulong min_i,
     }
     countsincecollected += count;
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("  steps2 used: %u\n", count);
     }
 
     if (o == 0 || minim < oOrig) {return;}
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("3 %lu\n", o);
     }
 
     int gap_pos = pos_gap_length_greater_than_four(collected);
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("3.1 %lu %lu %u\n", collected, gap_pos, gap_pos);
     }
 
-    if (first == o && gap_pos == 64) {
-        ulong idx = atomic_inc(match_count);
-        if (idx < max_matches) {
-            matches[idx] = minim;
+    if ((first == o && count)  && gap_pos == 64) {
+        o = o << 16;
+
+        count = 0;
+        first = o;
+        collected = o;
+        while (count < STEPS2 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0 && (o & 0x7) == 0) {
+            count++;
+
+            ulong a = o << 2;
+            ulong b = o << 1;
+            ulong c = o >> 1;
+            ulong d = o >> 2;
+            o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+
+            collected = collected | o;
         }
-        return;
+
+        uint ctzcol = ctz(collected);
+        o = o >> ctzcol;
+        collected = collected >> ctzcol;
+
+        gap_pos = pos_gap_length_greater_than_four(collected);
+
+        if (gap_pos == 64 && (first == o && count)) {
+            ulong idx = atomic_inc(match_count);
+            if (idx < max_matches) {
+                matches[idx] = RETVAL;
+            }
+            return;
+        }
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("4 %lu\n", o);
     }
 
@@ -228,7 +255,7 @@ __kernel void search_matches(const ulong min_i,
         }
         countsincecollected += count;
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("  steps3 used: %u\n", count);
         }
 
@@ -236,29 +263,29 @@ __kernel void search_matches(const ulong min_i,
 
         gap_pos = pos_gap_length_greater_than_four(collected);
 
-        if (first == o && gap_pos == 64) {
+        if ((first == o && count) && gap_pos == 64) {
             ulong idx = atomic_inc(match_count);
             if (idx < max_matches) {
-                matches[idx] = minim;
+                matches[idx] = RETVAL;
             }
             return;
         }
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("5 %lu, countsincecollected: %u \n", o, countsincecollected);
     }
 
     // Split Solution
-    if (gap_pos != 64 && (countsincecollected > 20 || first == o)) {
+    if (gap_pos != 64 && (countsincecollected > 20 || (first == o && count))) {
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("5 (splitting) %lu col: %lu, gap_pos: %u\n", o, collected, gap_pos);
         }
         ulong o1 = o & (~0UL >> (64 - gap_pos));
         ulong o2 = o >> gap_pos;
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("5.6 o1: %lu, o2: %lu mask1: %lx\n", o1, o2,(~0UL >> (64 - gap_pos)));
         }
 
@@ -279,14 +306,14 @@ __kernel void search_matches(const ulong min_i,
             minim = min(minim, o1);
         }
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("  steps4 used: %u\n", count);
         }
 
         if (o1 != 0 && minim >= oOrig) {
             ulong idx = atomic_inc(match_count);
             if (idx < max_matches) {
-                matches[idx] = minim;
+                matches[idx] = RETVAL;
             }
         }
 
@@ -310,14 +337,14 @@ __kernel void search_matches(const ulong min_i,
         if (o2 != 0 && minim >= oOrig) {
             ulong idx = atomic_inc(match_count);
             if (idx < max_matches) {
-                matches[idx] = minim;
+                matches[idx] = RETVAL;
             }
         }
 
         return;
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("6 %lu\n", o);
     }
 
@@ -326,7 +353,7 @@ __kernel void search_matches(const ulong min_i,
     // {
     //     ulong idx = atomic_inc(match_count);
     //     if (idx < max_matches) {
-    //         matches[idx] = minim;
+    //         matches[idx] = RETVAL;
     //     }
     //     return;
     // }
@@ -350,7 +377,7 @@ __kernel void search_matches(const ulong min_i,
         }
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("  steps5 used: %u\n", count);
     }
 
@@ -358,14 +385,14 @@ __kernel void search_matches(const ulong min_i,
         while ((o256.s0 & 1) == 0) {o256 = u256_shr_1(o256); }
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("7 %lu <> %lu <> %lu <> %lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
         printf("7.05 %d %d %d %d\n", o256.s0 < oOrig, o256.s1 == 0, o256.s2 == 0, o256.s3 == 0);
     }
 
     if (o256.s0 < oOrig && o256.s1 == 0 && o256.s2 == 0 && o256.s3 == 0) {return;}
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("7.1 %lu <> %lu <> %lu <> %lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
     }
 
@@ -387,20 +414,21 @@ __kernel void search_matches(const ulong min_i,
         minim256 = min(minim256, o256);
     }
 
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
         printf("  steps6 used: %u\n", count);
-    }
-
-    if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
         printf("8 %lu <> %lu <> %lu <> %lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
     }
 
-    if (u256_is_zero(o256) || (minim256.s0 < oOrig && minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3)) {return;}
+    if (u256_is_zero(o256) || (minim256.s0 < oOrig && minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3 == 0)) {return;}
+
+    if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
+        printf("9 %lu <> %lu <> %lu <> %lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
+    }
 
     // Split Solution
     if ((collected256.s1 & TOPMOSTBITSMASK) == 0 && (collected256.s2 & 0x7) == 0) {
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("5 (splitting)\n");
         }
         u256 o2561 = U256_ZERO;
@@ -410,7 +438,7 @@ __kernel void search_matches(const ulong min_i,
         o2562.s0 = o256.s2;
         o2562.s1 = o256.s3;
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("5.6\n");
         }
 
@@ -432,11 +460,11 @@ __kernel void search_matches(const ulong min_i,
             minim256 = min(minim256, o2561);
         }
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("  steps4 used: %u\n", count);
         }
 
-        if (u256_is_nonzero(o2561) && !(minim256.s0 < oOrig && minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3)) {
+        if (u256_is_nonzero(o2561) && !(minim256.s0 < oOrig && minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3 == 0)) {
             ulong idx = atomic_inc(match_count);
             if (idx < max_matches) {
                 matches[idx] = oOrig;
@@ -461,11 +489,11 @@ __kernel void search_matches(const ulong min_i,
             minim256 = min(minim256, o2562);
         }
 
-        if (oOrig == 222678959859ULL || oOrig == 477022791 || oOrig == 368754475) {
+        if (oOrig == 222678959859ULL || oOrig == 1814218441 || oOrig == 1692585739) {
             printf("  steps4 used: %u\n", count);
         }
 
-        if (u256_is_nonzero(o2562) && !(minim256.s0 < oOrig && minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3)) {
+        if (u256_is_nonzero(o2562) && !(minim256.s0 < oOrig && minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3 == 0)) {
             ulong idx = atomic_inc(match_count);
             if (idx < max_matches) {
                 matches[idx] = oOrig;
@@ -475,10 +503,10 @@ __kernel void search_matches(const ulong min_i,
         return;
     }
 
-    if (minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3) {
+    if (minim256.s1 == 0 && minim256.s2 == 0 && minim256.s3 == 0) {
         ulong idx = atomic_inc(match_count);
         if (idx < max_matches) {
-            matches[idx] = minim;
+            matches[idx] = RETVAL;
         }
         return;
     } else {

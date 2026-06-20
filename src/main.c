@@ -9,6 +9,48 @@
 #include <stdbool.h>
 #include <string.h>
 
+
+#if defined(_WIN32)
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+uint64_t get_time_micros(void) {
+    static LARGE_INTEGER freq;
+    LARGE_INTEGER counter;
+
+    if (freq.QuadPart == 0) {
+        QueryPerformanceFrequency(&freq);
+    }
+
+    QueryPerformanceCounter(&counter);
+
+    return (uint64_t)((counter.QuadPart * 1000000ULL) / freq.QuadPart);
+}
+
+#elif defined(__unix__) || defined(__APPLE__)
+
+#include <sys/time.h>
+#include <time.h>
+
+uint64_t get_time_micros(void) {
+#if defined(CLOCK_MONOTONIC)
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000000ULL + (uint64_t)tv.tv_usec;
+#endif
+}
+
+#else
+
+#error "Unsupported platform"
+
+#endif
+
 typedef struct {
     uint64_t *slots;
     size_t capacity; // must be a power of 2
@@ -129,7 +171,7 @@ int main(void) {
     const uint64_t trillion = 1000ULL * billion;
 
     const uint64_t min = 0ULL * billion;
-    const uint64_t max = 6000ULL * billion;
+    const uint64_t max = 1ULL * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.0001 * (max - min);
@@ -193,12 +235,16 @@ int main(void) {
                                         NULL, &err);
     CHECK_CL(err, "clCreateBuffer matches");
 
+    uint64_t timer_start_create_buff = get_time_micros();
+
     uint32_t zero = 0;
     cl_mem count_buf = clCreateBuffer(context,
                                     CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                                     sizeof(uint32_t),
                                     &zero, &err);
     CHECK_CL(err, "clCreateBuffer count");
+
+    uint64_t timer_end_create_buff = get_time_micros();
 
     err = clSetKernelArg(kernel, 0, sizeof(uint64_t), &min);
     CHECK_CL(err, "arg 0");
@@ -215,6 +261,8 @@ int main(void) {
     err = clSetKernelArg(kernel, 4, sizeof(uint64_t), &max_matches);
     CHECK_CL(err, "arg 4");
 
+    uint64_t timer_start_run_gpu = get_time_micros();
+
     size_t global_work_size = max - min;
     err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL,
                                  &global_work_size, NULL,
@@ -224,12 +272,14 @@ int main(void) {
     err = clFinish(queue);
     CHECK_CL(err, "clFinish");
 
+    uint64_t timer_end_run_gpu = get_time_micros();
+    
+    uint64_t timer_start_read_buff = get_time_micros();
     unsigned int match_count = 0;
     err = clEnqueueReadBuffer(queue, count_buf, CL_TRUE, 0,
                               sizeof(unsigned int), &match_count,
                               0, NULL, NULL);
     CHECK_CL(err, "read count");
-
     fprintf(stderr, "Raw match count reported: %u / %lu\n", match_count, max_matches);
 
     uint64_t to_read = match_count;
@@ -250,12 +300,14 @@ int main(void) {
                                   matches, 0, NULL, NULL);
         CHECK_CL(err, "read matches");
     }
+    uint64_t timer_end_read_buff = get_time_micros();
 
                 // uint64_t oOrig = matches[i];
             // if (oOrig == 222678959859ULL || oOrig == 595703ULL || oOrig == 610999ULL) {
             //     printf("out: %lu\n", oOrig);
             // }
 
+    uint64_t timer_start_dedup_and_print = get_time_micros();
     HashSet seen;
     if (!hashset_init(&seen, next_power_of_2(1.2 * max_matches))) {
         return 1;
@@ -272,7 +324,19 @@ int main(void) {
     hashset_free(&seen);
     printf("0}");
 
-    fprintf(stderr, "Raw match count reported: %u / %lu (%f) | Deduped: %u | (%f)\n", match_count, max_matches, ((float)(match_count))/((float)(max_matches)), num_deduped, ((float)(match_count))/((float)(max - min)));
+    uint64_t timer_end_dedup_and_print = get_time_micros();
+
+    fprintf(stderr, "\n-----\n");
+    fprintf(stderr, "Bounds    | min: %lu, max: %lu, diff: %lu | Procecessed %lu initial coniditions in total.\n", min, max, max - min, (max - min) >> 1);
+    fprintf(stderr, "Matched   | matches: %lu / max_matches: %lu (%f%% of Buffer Size)\n", match_count, max_matches, ((float)(100 * match_count))/((float)(max_matches)));
+    fprintf(stderr, "Deduped   | deduped: %lu | Filtered initial conditions by a factor of %lu thousand.\n", num_deduped, ((max - min) >> 1) / (thousand * num_deduped));
+    fprintf(stderr, "Timing    | create_buff: %luus, run_gpu: %luus (%lus), read_buff: %luus, dedup_and_print: %luus\n", timer_end_create_buff - timer_start_create_buff, timer_end_run_gpu - timer_start_run_gpu,(timer_end_run_gpu - timer_start_run_gpu) / million, timer_end_read_buff - timer_start_read_buff, timer_end_dedup_and_print - timer_start_dedup_and_print);
+
+
+
+    if (match_count >= max_matches) {
+        fprintf(stderr, "WARNING! BUFFER EXCEEDED! SOME INITIAL CONDITIONS HAVE BEEN LOST.");
+    }
 
     free(matches);
     free(source);
@@ -283,6 +347,10 @@ int main(void) {
     clReleaseProgram(program);
     clReleaseCommandQueue(queue);
     clReleaseContext(context);
+
+    if (match_count >= max_matches) {
+        return 1;
+    }
 
     return 0;
 }
