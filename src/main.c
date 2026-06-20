@@ -160,7 +160,7 @@ static void print_build_log(cl_program program, cl_device_id device) {
 }
 
 // #define KERNELFILE "kernels/search_matches.cl"
-#define KERNELFILE "kernels/v6.cl"
+#define KERNELFILE "kernels/v6stupid.cl"
 
 int main(void) {
     cl_int err;
@@ -171,7 +171,7 @@ int main(void) {
     const uint64_t trillion = 1000ULL * billion;
 
     const uint64_t min = 0ULL * billion;
-    const uint64_t max = 120ULL * billion;
+    const uint64_t max = 10ULL * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.001 * (max - min);

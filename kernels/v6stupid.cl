@@ -272,29 +272,46 @@ inline ulong bit_reverse(ulong x)
 }
 
 
-__kernel void search_matches(const ulong max_i,
-                             __global ulong *deduped,
-                             const ulong max_dedup
+
+__kernel void search_matches(const ulong min_i,
+                             const ulong max_i,
                              __global ulong *matches,
                              __global uint *match_count,
                              const ulong max_matches)
 {
-    
+    size_t gid = get_global_id(0);
+    ulong n = min_i + (ulong)gid;
 
-    size_t gid = get_global_id(0);  
-    
-    if (gid >= max_dedup) {
+    if (n >= max_i) {
         return;
     }
 
-    ulong o = deduped[gid];
+    ulong o = (n << 1) | 1;
     ulong oOrig = o;
+
+    #define STACK_SIZE 10
+    #define MAX_DEPTH 3
+
+    ulong stack_o[STACK_SIZE];
+    int stack_depth[STACK_SIZE];
+    int stack_ptr = 0;
+
+    stack_o[0] = oOrig;
+    stack_depth[0] = MAX_DEPTH;
+    stack_ptr++;
+
+    while (stack_ptr) {
+    
+    stack_ptr--;
+    ulong o = stack_o[stack_ptr];
+    ulong depth = stack_depth[stack_ptr];
+    
 
     if (EARLY_DEBUG) {
         printf("1 Started on o: %lu\n", o);
     }
 
-    if (oOrig > (bit_reverse(oOrig) >> clz(oOrig))) {return;}
+    if (oOrig > (bit_reverse(oOrig) >> clz(oOrig))) {continue;}
     
     // run 64bit
     int count = 0;
@@ -311,7 +328,7 @@ __kernel void search_matches(const ulong max_i,
     }
     o = o >> ctz(o);
 
-    if (o < oOrig) {return;}
+    if (o < oOrig) {continue;}
 
     if (EARLY_DEBUG) {
         printf("2  passed run64. o: %lu\n", o);
@@ -336,7 +353,7 @@ __kernel void search_matches(const ulong max_i,
         collected = collected | o;
     }
 
-    if (minim < oOrig) {return;}
+    if (minim < oOrig) {continue;}
 
     if (DEBUG_CHECK) {
         printf("3  passed run64 with periodicity and col. o: %lu\n", o);
@@ -366,7 +383,7 @@ __kernel void search_matches(const ulong max_i,
             collected = collected | o;
         }
 
-        if (minim < oOrig) {return;}
+        if (minim < oOrig) {continue;}
 
         if (DEBUG_CHECK) {
             printf("5    passed aperiodicity. o: %lu\n", o);
@@ -414,20 +431,28 @@ __kernel void search_matches(const ulong max_i,
         // 2. special glider check
         if (gap_pos == 64) {
             if (!is_forbidden_minim(minim)) {
-                ulong idx = atomic_inc(match_count);
-                if (idx < max_matches) {
-                    matches[idx] = RETVAL;
+                if (depth && (stack_ptr < STACK_SIZE)) {
+                    
+                    stack_o[stack_ptr] = RETVAL;
+                    stack_depth[stack_ptr] = depth - 1;
+                    stack_ptr++;
+                    
+                } else {
+                    ulong idx = atomic_inc(match_count);
+                    if (idx < max_matches) {
+                        matches[idx] = RETVAL;
 
-                    if (RET_DEBUG_CHECK) {
-                        printf("1 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                        if (RET_DEBUG_CHECK) {
+                            printf("1 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                        }
                     }
                 }
-                return;
+                continue;
             } else {
                 if (DEBUG_CHECK) {
                     printf("9      failed special glider check. o: %lu\n", o);
                 }
-                return;
+                continue;
             }
         }
 
@@ -447,7 +472,7 @@ __kernel void search_matches(const ulong max_i,
             printf("11  col gap. o1: %lu, o2: %lu\n", o1, o2);
         }
 
-        if (o1 < oOrig && o2 < oOrig) {return;}
+        if (o1 < oOrig && o2 < oOrig) {continue;}
 
         // run paired 64 bit w/ periodicity
         count = 0;
@@ -467,12 +492,20 @@ __kernel void search_matches(const ulong max_i,
         }
 
         if (!(minim < oOrig)) {
-            ulong idx = atomic_inc(match_count);
-            if (idx < max_matches) {
-                matches[idx] = RETVAL;
+            if (depth && (stack_ptr < STACK_SIZE)) {
+                
+                stack_o[stack_ptr] = RETVAL;
+                stack_depth[stack_ptr] = depth - 1;
+                stack_ptr++;
+                
+            } else {
+                ulong idx = atomic_inc(match_count);
+                if (idx < max_matches) {
+                    matches[idx] = RETVAL;
 
-                if (RET_DEBUG_CHECK) {
-                    printf("2 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                    if (RET_DEBUG_CHECK) {
+                        printf("2 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                    }
                 }
             }
         }
@@ -495,17 +528,24 @@ __kernel void search_matches(const ulong max_i,
         }
 
         if (!(minim < oOrig)) {
-            ulong idx = atomic_inc(match_count);
-            if (idx < max_matches) {
-                matches[idx] = RETVAL;
+            if (depth && (stack_ptr < STACK_SIZE)) {
+                stack_o[stack_ptr] = RETVAL;
+                stack_depth[stack_ptr] = depth - 1;
+                stack_ptr++;
+                
+            } else {
+                ulong idx = atomic_inc(match_count);
+                if (idx < max_matches) {
+                    matches[idx] = RETVAL;
 
-                if (RET_DEBUG_CHECK) {
-                    printf("3 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                    if (RET_DEBUG_CHECK) {
+                        printf("3 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                    }
                 }
             }
         }
 
-        return;
+        continue;
     }
 
 
@@ -545,7 +585,7 @@ __kernel void search_matches(const ulong max_i,
         if (o256.s0 == 0) { o256 = (u256)(o256.s1, o256.s2, o256.s3, 0); }
         o256 = u256_small_shr(o256, u256_ctz(o256));
 
-        if (!u256_ge_u64(o256, oOrig)) {return;}
+        if (!u256_ge_u64(o256, oOrig)) {continue;}
 
         if (DEBUG_CHECK) {
             printf("15  256 BIT passed first run o: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
@@ -575,7 +615,7 @@ __kernel void search_matches(const ulong max_i,
         if (o256.s0 == 0) { o256 = (u256)(o256.s1, o256.s2, o256.s3, 0); }
         o256 = u256_small_shr(o256, u256_ctz(o256));
 
-        if (!u256_ge_u64(o256, oOrig)) {return;}
+        if (!u256_ge_u64(o256, oOrig)) {continue;}
 
         if (DEBUG_CHECK) {
             printf("16  256 BIT passed second run o: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
@@ -607,19 +647,31 @@ __kernel void search_matches(const ulong max_i,
             gap_pos = pos_gap_length_greater_than_four256(collected256);
 
             if (gap_pos == 256) {
-                ulong idx = atomic_inc(match_count);
-                if (idx < max_matches) {
+                if (depth && (stack_ptr < STACK_SIZE)) {
                     if (!(o256.s3 || o256.s2 || o256.s1)) {
-                        matches[idx] = RETVAL;
+                        stack_o[stack_ptr] = RETVAL;
                     } else {
-                        matches[idx] = minim;
+                        stack_o[stack_ptr] = minim;
                     }
+                    stack_depth[stack_ptr] = depth - 1;
+                    stack_ptr++;
+                    continue;
+                    
+                } else {
+                    ulong idx = atomic_inc(match_count);
+                    if (idx < max_matches) {
+                        if (!(o256.s3 || o256.s2 || o256.s1)) {
+                            matches[idx] = RETVAL;
+                        } else {
+                            matches[idx] = minim;
+                        }
 
-                    if (RET_DEBUG_CHECK_256) {
-                        printf("4 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                        if (RET_DEBUG_CHECK_256) {
+                            printf("4 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                        }
                     }
+                    continue;
                 }
-                return;
             }
         }
     } else {
@@ -638,7 +690,7 @@ __kernel void search_matches(const ulong max_i,
     u256 o2561 = u256_shr_ctz_nonzero(o256 & u256_low_bits_mask(gap_pos));
     u256 o2562 = u256_shr_ctz_nonzero(u256_shr(o256, gap_pos));
 
-    if (!(u256_ge_u64(o2561, oOrig) || u256_ge_u64(o2562, oOrig))) {return;}
+    if (!(u256_ge_u64(o2561, oOrig) || u256_ge_u64(o2562, oOrig))) {continue;}
 
     if (DEBUG_CHECK) {
         printf("19  o1: %lu<>%lu<>%lu<>%lu, gap: %i\n", o2561.s3, o2561.s2, o2561.s1, o2561.s0, gap_pos);
@@ -665,16 +717,27 @@ __kernel void search_matches(const ulong max_i,
     }
 
     if (u256_ge_u64(o2561, oOrig)) {
-        ulong idx = atomic_inc(match_count);
-        if (idx < max_matches) {
+        if (depth && (stack_ptr < STACK_SIZE)) {
             if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
-                matches[idx] = RETVAL256;
+                stack_o[stack_ptr] = RETVAL256;
             } else {
-                matches[idx] = minim;
+                stack_o[stack_ptr] = minim;
             }
+            stack_depth[stack_ptr] = depth - 1;
+            stack_ptr++;
+            
+        } else {
+            ulong idx = atomic_inc(match_count);
+            if (idx < max_matches) {
+                if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                    matches[idx] = RETVAL256;
+                } else {
+                    matches[idx] = minim;
+                }
 
-            if (RET_DEBUG_CHECK_256) {
-                printf("5 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
+                if (RET_DEBUG_CHECK_256) {
+                    printf("5 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
+                }
             }
         }
     }
@@ -700,18 +763,33 @@ __kernel void search_matches(const ulong max_i,
     }
 
     if (u256_ge_u64(o2562, oOrig)) {
-        ulong idx = atomic_inc(match_count);
-        if (idx < max_matches) {
+        if (depth && (stack_ptr < STACK_SIZE)) {
             if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
-                matches[idx] = RETVAL256;
+                stack_o[stack_ptr] = RETVAL256;
             } else {
-                matches[idx] = minim;
+                stack_o[stack_ptr] = minim;
             }
+            stack_depth[stack_ptr] = depth - 1;
+            stack_ptr++;
+            
+        } else {
+            ulong idx = atomic_inc(match_count);
+            if (idx < max_matches) {
+                if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                    matches[idx] = RETVAL256;
+                } else {
+                    matches[idx] = minim;
+                }
 
-            if (RET_DEBUG_CHECK_256) {
-                printf("6 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
+                if (RET_DEBUG_CHECK_256) {
+                    printf("6 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
+                }
             }
         }
+    }
+
+    continue;
+
     }
 
     return;
