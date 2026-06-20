@@ -278,7 +278,9 @@ __kernel void search_matches(const ulong min_i,
                              __global uint *match_count,
                              const ulong max_matches)
 {
-    size_t gid = get_global_id(0);
+    
+
+    size_t gid = get_global_id(0);  
     ulong n = min_i + (ulong)gid;
 
     if (n >= max_i) {
@@ -713,6 +715,4 @@ __kernel void search_matches(const ulong min_i,
     }
 
     return;
-
-
 }
