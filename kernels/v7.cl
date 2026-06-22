@@ -272,87 +272,75 @@ inline ulong bit_reverse(ulong x)
 }
 
 
-__kernel void search_matches(const ulong max_i,
-                             __global ulong *deduped,
-                             const ulong max_dedup
+
+__kernel void search_matches(const ulong min_i,
+                             const ulong max_i,
                              __global ulong *matches,
                              __global uint *match_count,
                              const ulong max_matches)
 {
-    
+    size_t gid = get_global_id(0);
+    ulong n = min_i + (ulong)gid;
 
-    size_t gid = get_global_id(0);  
-    
-    if (gid >= max_dedup) {
+    if (n >= max_i) {
         return;
     }
 
-    ulong o = deduped[gid];
+    ulong o = (n << 1) | 1;
     ulong oOrig = o;
 
-    if (EARLY_DEBUG) {
-        printf("1 Started on o: %lu\n", o);
-    }
+    #define STACK_SIZE 10
+    #define MAX_DEPTH 10
+
+    ulong stack_o[STACK_SIZE];
+    int stack_depth[STACK_SIZE];
+    int stack_ptr = 0;
+
+    stack_o[0] = oOrig;
+    stack_depth[0] = MAX_DEPTH;
+    stack_ptr++;
 
     if (oOrig > (bit_reverse(oOrig) >> clz(oOrig))) {return;}
-    
-    // run 64bit
-    int count = 0;
-    while (o >= oOrig && count < STEPS1 && (o & TOPMOSTBITSMASK) == 0) {
-        count++;
 
-        ulong a = o << 3;
-        ulong b = o << 2;
-        ulong c = o << 1;
-        ulong d = o >> 1;
-        o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+    while (stack_ptr) {
+        
+        stack_ptr--;
+        ulong o = stack_o[stack_ptr];
+        ulong depth = stack_depth[stack_ptr];
+        
 
-        o = o >> (((o & 0xF) == 0) << 2);  // approximate shr(o, ctz(o))
-    }
-    o = o >> ctz(o);
-
-    if (o < oOrig) {return;}
-
-    if (EARLY_DEBUG) {
-        printf("2  passed run64. o: %lu\n", o);
-    }
-
-    // run 64 bit w/ periodicity and collected
-    count = 0;
-    ulong first = o;
-    ulong minim = o;
-    ulong collected = o;
-    while (minim >= oOrig && count < STEPS2 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0) {
-        count++;
-
-        ulong a = o << 3;
-        ulong b = o << 2;
-        ulong c = o << 1;
-        ulong d = o >> 1;
-        o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
-
-        o = o >> ctz(o);
-        minim = min(minim, o);
-        collected = collected | o;
-    }
-
-    if (minim < oOrig) {return;}
-
-    if (DEBUG_CHECK) {
-        printf("3  passed run64 with periodicity and col. o: %lu\n", o);
-    }
-
-    // 2. aperiodic
-    if (first != o) {
-        if (DEBUG_CHECK) {
-            printf("4    aperiodic.\n");
+        if (EARLY_DEBUG) {
+            printf("1 Started on o: %lu\n", o);
         }
 
+        
+        // run 64bit
+        int count = 0;
+        while (o >= oOrig && count < STEPS1 && (o & TOPMOSTBITSMASK) == 0) {
+            count++;
+
+            ulong a = o << 3;
+            ulong b = o << 2;
+            ulong c = o << 1;
+            ulong d = o >> 1;
+            o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+
+            o = o >> (((o & 0xF) == 0) << 2);  // approximate shr(o, ctz(o))
+        }
+        o = o >> ctz(o);
+
+        if (o < oOrig) {continue;}
+
+        if (EARLY_DEBUG) {
+            printf("2  passed run64. o: %lu\n", o);
+        }
+
+        // run 64 bit w/ periodicity and collected
         count = 0;
-        first = o;
-        minim = o;
-        collected = o;
-        while (minim >= oOrig && count < STEPS3 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0) {
+        ulong first = o;
+        ulong minim = o;
+        ulong collected = o;
+        while (minim >= oOrig && count < STEPS2 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0) {
             count++;
 
             ulong a = o << 3;
@@ -366,352 +354,373 @@ __kernel void search_matches(const ulong max_i,
             collected = collected | o;
         }
 
-        if (minim < oOrig) {return;}
+        if (minim < oOrig) {continue;}
 
         if (DEBUG_CHECK) {
-            printf("5    passed aperiodicity. o: %lu\n", o);
-        }
-    }
-
-    // 3. run 64bit NO SHIFT w/ periodicity and collected
-    uint gap_pos = pos_gap_length_greater_than_four(collected);
-    if (DEBUG_CHECK) {
-        printf("6  3. o: %lu (col: %lu, pos %i)\n", o, collected, gap_pos);
-    }
-    if (gap_pos == 64 && (minim & LARGERTOPMOSTBITSMASK) == 0) {
-
-        if (DEBUG_CHECK) {
-            printf("7    no gap. col: %lu, gap_pos: %i\n", collected, gap_pos);
+            printf("3  passed run64 with periodicity and col. o: %lu\n", o);
         }
 
-        o = minim << 16;
-
-        count = 0;
-        first = o;
-        ulong collected_no_shift = o;
-        while (count < STEPS2 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0 && (o & 0x7) == 0) {
-            count++;
-
-            ulong a = o << 2;
-            ulong b = o << 1;
-            ulong c = o >> 1;
-            ulong d = o >> 2;
-            o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
-
-            collected_no_shift = collected_no_shift | o;
-        }
-
-        uint ctzcol = ctz(collected_no_shift);
-        collected_no_shift = collected_no_shift >> ctzcol;
-        o = o >> ctzcol;
-
-        gap_pos = pos_gap_length_greater_than_four(collected_no_shift);
-
-        if (DEBUG_CHECK) {
-            printf("8    col: %lu, gap_pos: %i\n", collected_no_shift, gap_pos);
-        }
-
-        // 2. special glider check
-        if (gap_pos == 64) {
-            if (!is_forbidden_minim(minim)) {
-                ulong idx = atomic_inc(match_count);
-                if (idx < max_matches) {
-                    matches[idx] = RETVAL;
-
-                    if (RET_DEBUG_CHECK) {
-                        printf("1 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
-                    }
-                }
-                return;
-            } else {
-                if (DEBUG_CHECK) {
-                    printf("9      failed special glider check. o: %lu\n", o);
-                }
-                return;
+        // 2. aperiodic
+        if (first != o) {
+            if (DEBUG_CHECK) {
+                printf("4    aperiodic.\n");
             }
-        }
-
-        if (DEBUG_CHECK) {
-            printf("10    failed no shift. o: %lu\n", o);
-        }
-    }
-
-    // 1. col gap
-    if ((o & LARGERTOPMOSTBITSMASK) == 0) {
-        ulong o1 = o & (~0UL >> (64 - gap_pos));
-        ulong o2 = o >> gap_pos;
-        o1 = o1 >> ctz(o1);
-        o2 = o2 >> ctz(o2);
-
-        if (DEBUG_CHECK) {
-            printf("11  col gap. o1: %lu, o2: %lu\n", o1, o2);
-        }
-
-        if (o1 < oOrig && o2 < oOrig) {return;}
-
-        // run paired 64 bit w/ periodicity
-        count = 0;
-        first = o1;
-        minim = o1;
-        while (minim >= oOrig && count < STEPS2 && (first != o1 || count == 0) && (o1 & TOPMOSTBITSMASK) == 0) {
-            count++;
-
-            ulong a = o1 << 3;
-            ulong b = o1 << 2;
-            ulong c = o1 << 1;
-            ulong d = o1 >> 1;
-            o1 = (a | b | c | d | o1) ^ (a ^ b ^ c ^ d ^ o1);
-
-            o1 = o1 >> ctz(o1);
-            minim = min(minim, o1);
-        }
-
-        if (!(minim < oOrig)) {
-            ulong idx = atomic_inc(match_count);
-            if (idx < max_matches) {
-                matches[idx] = RETVAL;
-
-                if (RET_DEBUG_CHECK) {
-                    printf("2 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
-                }
-            }
-        }
-
-        // run paired 64 bit w/ periodicity
-        count = 0;
-        first = o2;
-        minim = o2;
-        while (minim >= oOrig && count < STEPS2 && (first != o2 || count == 0) && (o2 & TOPMOSTBITSMASK) == 0) {
-            count++;
-
-            ulong a = o1 << 3;
-            ulong b = o1 << 2;
-            ulong c = o1 << 1;
-            ulong d = o1 >> 1;
-            o2 = (a | b | c | d | o2) ^ (a ^ b ^ c ^ d ^ o2);
-
-            o2 = o2 >> ctz(o2);
-            minim = min(minim, o2);
-        }
-
-        if (!(minim < oOrig)) {
-            ulong idx = atomic_inc(match_count);
-            if (idx < max_matches) {
-                matches[idx] = RETVAL;
-
-                if (RET_DEBUG_CHECK) {
-                    printf("3 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
-                }
-            }
-        }
-
-        return;
-    }
-
-
-    // Top branch complete! Moving onto 256-bit evaluation
-    if (DEBUG_CHECK) {
-        printf("12 steps: %i\n", count);
-        printf("13   256 BIT o: %lu<>%lu<>%lu<>%lu\n", 0UL, 0UL, 0UL, o);
-    }
-
-    // 2. no MAJOR gap
-    u256 o256 = (u256)(o, 0, 0, 0);
-    u256 first256;
-    u256 minim256;
-    u256 collected256;
-    if (o & MIDDLEBITSMASK || count == 0) {
-        if (DEBUG_CHECK) {
-            printf("14  middle gap filled");
-        }
-
-        // run 256 bit
-        count = 0;
-        while (u256_ge_u64(o256, oOrig) && count < STEPS1 && (o256.s3 & TOPMOSTBITSMASK) == 0) {
-            count++;
-
-            u256 a = u256_shl_3(o256);
-            u256 b = u256_shl_2(o256);
-            u256 c = u256_shl_1(o256);
-            u256 d = u256_shr_1(o256);
-            o256 = (a | b | c | d | o256) ^ (a ^ b ^ c ^ d ^ o256);
-
-            if ((o256.s0 & 0xFF) == 0) {
-                o256 = u256_shr_8(o256);  // approximate shr(o, ctz(o))
-            }
-        }
-
-        if (o256.s0 == 0 && o256.s1 == 0) { o256 = (u256)(o256.s2, o256.s3, 0, 0); }
-        if (o256.s0 == 0) { o256 = (u256)(o256.s1, o256.s2, o256.s3, 0); }
-        o256 = u256_small_shr(o256, u256_ctz(o256));
-
-        if (!u256_ge_u64(o256, oOrig)) {return;}
-
-        if (DEBUG_CHECK) {
-            printf("15  256 BIT passed first run o: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
-        }
-
-
-        // 2. run 256 bit w/ periodicity and collected
-        count = 0;
-        first256 = o256;
-        minim256 = o256;
-        collected256 = o256;
-        while (u256_ge_u64(o256, oOrig) && count < STEPS2 && (u256_ne(first256, o256) || count == 0) && (o256.s3 & TOPMOSTBITSMASK) == 0) {
-            count++;
-
-            u256 a = u256_shl_3(o256);
-            u256 b = u256_shl_2(o256);
-            u256 c = u256_shl_1(o256);
-            u256 d = u256_shr_1(o256);
-            o256 = (a | b | c | d | o256) ^ (a ^ b ^ c ^ d ^ o256);
-
-            o256 = u256_small_shr(o256, u256_ctz(o256));
-            minim256 = u256_min(minim256, o256);
-            collected256 = collected256 | o256;
-        }
-
-        if (o256.s0 == 0 && o256.s1 == 0) { o256 = (u256)(o256.s2, o256.s3, 0, 0); }
-        if (o256.s0 == 0) { o256 = (u256)(o256.s1, o256.s2, o256.s3, 0); }
-        o256 = u256_small_shr(o256, u256_ctz(o256));
-
-        if (!u256_ge_u64(o256, oOrig)) {return;}
-
-        if (DEBUG_CHECK) {
-            printf("16  256 BIT passed second run o: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
-        }
-
-        // 3. run 256 bit NO SHIFT w/ periodicity and collected
-        gap_pos = pos_gap_length_greater_than_four256(collected256);
-        if (gap_pos == 256 && (o256.s3 == 0)) {
-
-            o256 = (u256)(0, o256.s0, o256.s1, o256.s2);
 
             count = 0;
-            first256 = o256;
-            collected256 = o256;
-            while (count < STEPS2 && (u256_ne(first256, o256) || count == 0) && (o256.s3 & TOPMOSTBITSMASK) == 0 && (o256.s0 & 0x7) == 0) {
+            first = o;
+            minim = o;
+            collected = o;
+            while (minim >= oOrig && count < STEPS3 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0) {
                 count++;
 
-                u256 a = u256_shl_2(o256);
-                u256 b = u256_shl_1(o256);
-                u256 c = u256_shr_1(o256);
-                u256 d = u256_shr_2(o256);
+                ulong a = o << 3;
+                ulong b = o << 2;
+                ulong c = o << 1;
+                ulong d = o >> 1;
+                o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+
+                o = o >> ctz(o);
+                minim = min(minim, o);
+                collected = collected | o;
+            }
+
+            if (minim < oOrig) {continue;}
+
+            if (DEBUG_CHECK) {
+                printf("5    passed aperiodicity. o: %lu\n", o);
+            }
+        }
+
+        // 3. run 64bit NO SHIFT w/ periodicity and collected
+        uint gap_pos = pos_gap_length_greater_than_four(collected);
+        if (DEBUG_CHECK) {
+            printf("6  3. o: %lu (col: %lu, pos %i)\n", o, collected, gap_pos);
+        }
+        if (gap_pos == 64 && (minim & LARGERTOPMOSTBITSMASK) == 0) {
+
+            if (DEBUG_CHECK) {
+                printf("7    no gap. col: %lu, gap_pos: %i\n", collected, gap_pos);
+            }
+
+            o = minim << 16;
+
+            count = 0;
+            first = o;
+            ulong collected_no_shift = o;
+            while (count < STEPS2 && (first != o || count == 0) && (o & TOPMOSTBITSMASK) == 0 && (o & 0x7) == 0) {
+                count++;
+
+                ulong a = o << 2;
+                ulong b = o << 1;
+                ulong c = o >> 1;
+                ulong d = o >> 2;
+                o = (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+
+                collected_no_shift = collected_no_shift | o;
+            }
+
+            uint ctzcol = ctz(collected_no_shift);
+            collected_no_shift = collected_no_shift >> ctzcol;
+            o = o >> ctzcol;
+
+            gap_pos = pos_gap_length_greater_than_four(collected_no_shift);
+
+            if (DEBUG_CHECK) {
+                printf("8    col: %lu, gap_pos: %i\n", collected_no_shift, gap_pos);
+            }
+
+            // 2. special glider check
+            if (gap_pos == 64) {
+                if (!is_forbidden_minim(minim)) {
+                    if (depth && (stack_ptr < STACK_SIZE)) {
+                        
+                        stack_o[stack_ptr] = minim;
+                        stack_depth[stack_ptr] = depth - 1;
+                        stack_ptr++;
+                        
+                    } else {
+                        ulong idx = atomic_inc(match_count);
+                        if (idx < max_matches) {
+                            matches[idx] = RETVAL;
+
+                            if (RET_DEBUG_CHECK) {
+                                printf("1 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                            }
+                        }
+                    }
+                    continue;
+                } else {
+                    if (DEBUG_CHECK) {
+                        printf("9      failed special glider check. o: %lu\n", o);
+                    }
+                    continue;
+                }
+            }
+
+            if (DEBUG_CHECK) {
+                printf("10    failed no shift. o: %lu\n", o);
+            }
+        }
+
+        // 1. col gap
+        if ((o & LARGERTOPMOSTBITSMASK) == 0) {
+            ulong o1 = o & (~0UL >> (64 - gap_pos));
+            ulong o2 = o >> gap_pos;
+            o1 = o1 >> ctz(o1);
+            o2 = o2 >> ctz(o2);
+
+            stack_o[stack_ptr] = o1;
+            stack_depth[stack_ptr] = depth - 1;
+            stack_ptr++;
+
+            stack_o[stack_ptr] = o2;
+            stack_depth[stack_ptr] = depth - 1;
+            stack_ptr++;
+
+            continue;
+        }
+
+
+        // Top branch complete! Moving onto 256-bit evaluation
+        if (DEBUG_CHECK) {
+            printf("12 steps: %i\n", count);
+            printf("13   256 BIT o: %lu<>%lu<>%lu<>%lu\n", 0UL, 0UL, 0UL, o);
+        }
+
+        // 2. no MAJOR gap
+        u256 o256 = (u256)(o, 0, 0, 0);
+        u256 first256;
+        u256 minim256;
+        u256 collected256;
+        if (o & MIDDLEBITSMASK || count == 0) {
+            if (DEBUG_CHECK) {
+                printf("14  middle gap filled");
+            }
+
+            // run 256 bit
+            count = 0;
+            while (u256_ge_u64(o256, oOrig) && count < STEPS1 && (o256.s3 & TOPMOSTBITSMASK) == 0) {
+                count++;
+
+                u256 a = u256_shl_3(o256);
+                u256 b = u256_shl_2(o256);
+                u256 c = u256_shl_1(o256);
+                u256 d = u256_shr_1(o256);
                 o256 = (a | b | c | d | o256) ^ (a ^ b ^ c ^ d ^ o256);
 
+                if ((o256.s0 & 0xFF) == 0) {
+                    o256 = u256_shr_8(o256);  // approximate shr(o, ctz(o))
+                }
+            }
+
+            if (o256.s0 == 0 && o256.s1 == 0) { o256 = (u256)(o256.s2, o256.s3, 0, 0); }
+            if (o256.s0 == 0) { o256 = (u256)(o256.s1, o256.s2, o256.s3, 0); }
+            o256 = u256_small_shr(o256, u256_ctz(o256));
+
+            if (!u256_ge_u64(o256, oOrig)) {continue;}
+
+            if (DEBUG_CHECK) {
+                printf("15  256 BIT passed first run o: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
+            }
+
+
+            // 2. run 256 bit w/ periodicity and collected
+            count = 0;
+            first256 = o256;
+            minim256 = o256;
+            collected256 = o256;
+            while (u256_ge_u64(o256, oOrig) && count < STEPS2 && (u256_ne(first256, o256) || count == 0) && (o256.s3 & TOPMOSTBITSMASK) == 0) {
+                count++;
+
+                u256 a = u256_shl_3(o256);
+                u256 b = u256_shl_2(o256);
+                u256 c = u256_shl_1(o256);
+                u256 d = u256_shr_1(o256);
+                o256 = (a | b | c | d | o256) ^ (a ^ b ^ c ^ d ^ o256);
+
+                o256 = u256_small_shr(o256, u256_ctz(o256));
+                minim256 = u256_min(minim256, o256);
                 collected256 = collected256 | o256;
             }
 
-            while (collected256.s0 & 1) {o256 = u256_shr_1(o256); collected256 = u256_shr_1(collected256);}
+            if (o256.s0 == 0 && o256.s1 == 0) { o256 = (u256)(o256.s2, o256.s3, 0, 0); }
+            if (o256.s0 == 0) { o256 = (u256)(o256.s1, o256.s2, o256.s3, 0); }
+            o256 = u256_small_shr(o256, u256_ctz(o256));
 
+            if (!u256_ge_u64(o256, oOrig)) {continue;}
+
+            if (DEBUG_CHECK) {
+                printf("16  256 BIT passed second run o: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
+            }
+
+            // 3. run 256 bit NO SHIFT w/ periodicity and collected
             gap_pos = pos_gap_length_greater_than_four256(collected256);
+            if (gap_pos == 256 && (o256.s3 == 0)) {
 
-            if (gap_pos == 256) {
+                o256 = (u256)(0, o256.s0, o256.s1, o256.s2);
+
+                count = 0;
+                first256 = o256;
+                collected256 = o256;
+                while (count < STEPS2 && (u256_ne(first256, o256) || count == 0) && (o256.s3 & TOPMOSTBITSMASK) == 0 && (o256.s0 & 0x7) == 0) {
+                    count++;
+
+                    u256 a = u256_shl_2(o256);
+                    u256 b = u256_shl_1(o256);
+                    u256 c = u256_shr_1(o256);
+                    u256 d = u256_shr_2(o256);
+                    o256 = (a | b | c | d | o256) ^ (a ^ b ^ c ^ d ^ o256);
+
+                    collected256 = collected256 | o256;
+                }
+
+                while (collected256.s0 & 1) {o256 = u256_shr_1(o256); collected256 = u256_shr_1(collected256);}
+
+                gap_pos = pos_gap_length_greater_than_four256(collected256);
+
+                if (gap_pos == 256) {
+                    if (depth && (stack_ptr < STACK_SIZE)) {
+                        if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                            stack_o[stack_ptr] = minim256.s0;
+                        } else {
+                            stack_o[stack_ptr] = minim;
+                        }
+                        stack_depth[stack_ptr] = depth - 1;
+                        stack_ptr++;
+                        continue;
+                        
+                    } else {
+                        ulong idx = atomic_inc(match_count);
+                        if (idx < max_matches) {
+                            if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                                matches[idx] = RETVAL256;
+                            } else {
+                                matches[idx] = RETVAL;
+                            }
+
+                            if (RET_DEBUG_CHECK_256) {
+                                printf("4 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
+        } else {
+            // gap_pos = pos_gap_length_greater_than_four256((u256)(collected, 0, 0, 0));
+
+            if (DEBUG_CHECK) {
+                printf("17  middle gap not filled. col: %lu, gap_pos: %i\n", collected, gap_pos);
+            }
+        }
+
+        // 1. MAJOR gap - - OR - - 1. col gap
+        if (DEBUG_CHECK) {
+            printf("18  256 BIT SPLIT major gap or col gap at o: %lu<>%lu<>%lu<>%lu, gap: %i\n", o256.s3, o256.s2, o256.s1, o256.s0, gap_pos);
+        }
+
+        u256 o2561 = u256_shr_ctz_nonzero(o256 & u256_low_bits_mask(gap_pos));
+        u256 o2562 = u256_shr_ctz_nonzero(u256_shr(o256, gap_pos));
+
+        if (!(u256_ge_u64(o2561, oOrig) || u256_ge_u64(o2562, oOrig))) {continue;}
+
+
+        if (DEBUG_CHECK) {
+            printf("19  o1: %lu<>%lu<>%lu<>%lu, gap: %i\n", o2561.s3, o2561.s2, o2561.s1, o2561.s0, gap_pos);
+            printf("20  o2: %lu<>%lu<>%lu<>%lu, gap: %i\n", o2562.s3, o2562.s2, o2562.s1, o2562.s0, gap_pos);
+        }
+
+        // run paired 256 bit w/ periodicity
+        count = 0;
+        first256 = o2561;
+        minim256 = o2561;
+        collected256 = o2561;
+        while (u256_ge_u64(o2561, oOrig) && count < STEPS2 && (u256_ne(first256, o2561) || count == 0) && (o2561.s3 & TOPMOSTBITSMASK) == 0) {
+            count++;
+
+            u256 a = u256_shl_3(o2561);
+            u256 b = u256_shl_2(o2561);
+            u256 c = u256_shl_1(o2561);
+            u256 d = u256_shr_1(o2561);
+            o2561 = (a | b | c | d | o2561) ^ (a ^ b ^ c ^ d ^ o2561);
+
+            o2561 = u256_small_shr(o2561, u256_ctz(o2561));
+            minim256 = u256_min(minim256, o2561);
+            collected256 = collected256 | o2561;
+        }
+
+        if (u256_ge_u64(o2561, oOrig)) {
+            if (depth && (stack_ptr < STACK_SIZE)) {
+                if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                    stack_o[stack_ptr] = minim256.s0;
+                } else {
+                    stack_o[stack_ptr] = minim;
+                }
+                stack_depth[stack_ptr] = depth - 1;
+                stack_ptr++;
+                
+            } else {
                 ulong idx = atomic_inc(match_count);
                 if (idx < max_matches) {
-                    if (!(o256.s3 || o256.s2 || o256.s1)) {
-                        matches[idx] = RETVAL;
+                    if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                        matches[idx] = RETVAL256;
                     } else {
-                        matches[idx] = minim;
+                        matches[idx] = RETVAL;
                     }
 
                     if (RET_DEBUG_CHECK_256) {
-                        printf("4 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL, oOrig, minim, o);
+                        printf("5 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
                     }
                 }
-                return;
             }
         }
-    } else {
-        // gap_pos = pos_gap_length_greater_than_four256((u256)(collected, 0, 0, 0));
+        
 
-        if (DEBUG_CHECK) {
-            printf("17  middle gap not filled. col: %lu, gap_pos: %i\n", collected, gap_pos);
+        // run paired 256 bit w/ periodicity
+        count = 0;
+        first256 = o2562;
+        minim256 = o2562;
+        collected256 = o2562;
+        while (u256_ge_u64(o2562, oOrig) && count < STEPS2 && (u256_ne(first256, o2562) || count == 0) && (o2562.s3 & TOPMOSTBITSMASK) == 0) {
+            count++;
+
+            u256 a = u256_shl_3(o2562);
+            u256 b = u256_shl_2(o2562);
+            u256 c = u256_shl_1(o2562);
+            u256 d = u256_shr_1(o2562);
+            o2562 = (a | b | c | d | o2562) ^ (a ^ b ^ c ^ d ^ o2562);
+
+            o2562 = u256_small_shr(o2562, u256_ctz(o2562));
+            minim256 = u256_min(minim256, o2562);
+            collected256 = collected256 | o2562;
         }
-    }
 
-    // 1. MAJOR gap - - OR - - 1. col gap
-    if (DEBUG_CHECK) {
-        printf("18  256 BIT SPLIT major gap or col gap at o: %lu<>%lu<>%lu<>%lu, gap: %i\n", o256.s3, o256.s2, o256.s1, o256.s0, gap_pos);
-    }
-
-    u256 o2561 = u256_shr_ctz_nonzero(o256 & u256_low_bits_mask(gap_pos));
-    u256 o2562 = u256_shr_ctz_nonzero(u256_shr(o256, gap_pos));
-
-    if (!(u256_ge_u64(o2561, oOrig) || u256_ge_u64(o2562, oOrig))) {return;}
-
-    if (DEBUG_CHECK) {
-        printf("19  o1: %lu<>%lu<>%lu<>%lu, gap: %i\n", o2561.s3, o2561.s2, o2561.s1, o2561.s0, gap_pos);
-        printf("20  o2: %lu<>%lu<>%lu<>%lu, gap: %i\n", o2562.s3, o2562.s2, o2562.s1, o2562.s0, gap_pos);
-    }
-
-    // run paired 256 bit w/ periodicity
-    count = 0;
-    first256 = o2561;
-    minim256 = o2561;
-    collected256 = o2561;
-    while (u256_ge_u64(o2561, oOrig) && count < STEPS2 && (u256_ne(first256, o2561) || count == 0) && (o2561.s3 & TOPMOSTBITSMASK) == 0) {
-        count++;
-
-        u256 a = u256_shl_3(o2561);
-        u256 b = u256_shl_2(o2561);
-        u256 c = u256_shl_1(o2561);
-        u256 d = u256_shr_1(o2561);
-        o2561 = (a | b | c | d | o2561) ^ (a ^ b ^ c ^ d ^ o2561);
-
-        o2561 = u256_small_shr(o2561, u256_ctz(o2561));
-        minim256 = u256_min(minim256, o2561);
-        collected256 = collected256 | o2561;
-    }
-
-    if (u256_ge_u64(o2561, oOrig)) {
-        ulong idx = atomic_inc(match_count);
-        if (idx < max_matches) {
-            if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
-                matches[idx] = RETVAL256;
+        if (u256_ge_u64(o2562, oOrig)) {
+            if (depth && (stack_ptr < STACK_SIZE)) {
+                if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                    stack_o[stack_ptr] = RETVAL256;
+                } else {
+                    stack_o[stack_ptr] = minim;
+                }
+                stack_depth[stack_ptr] = depth - 1;
+                stack_ptr++;
+                
             } else {
-                matches[idx] = minim;
-            }
+                ulong idx = atomic_inc(match_count);
+                if (idx < max_matches) {
+                    if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
+                        matches[idx] = RETVAL256;
+                    } else {
+                        matches[idx] = RETVAL;
+                    }
 
-            if (RET_DEBUG_CHECK_256) {
-                printf("5 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
-            }
-        }
-    }
-    
-
-    // run paired 256 bit w/ periodicity
-    count = 0;
-    first256 = o2562;
-    minim256 = o2562;
-    collected256 = o2562;
-    while (u256_ge_u64(o2562, oOrig) && count < STEPS2 && (u256_ne(first256, o2562) || count == 0) && (o2562.s3 & TOPMOSTBITSMASK) == 0) {
-        count++;
-
-        u256 a = u256_shl_3(o2562);
-        u256 b = u256_shl_2(o2562);
-        u256 c = u256_shl_1(o2562);
-        u256 d = u256_shr_1(o2562);
-        o2562 = (a | b | c | d | o2562) ^ (a ^ b ^ c ^ d ^ o2562);
-
-        o2562 = u256_small_shr(o2562, u256_ctz(o2562));
-        minim256 = u256_min(minim256, o2562);
-        collected256 = collected256 | o2562;
-    }
-
-    if (u256_ge_u64(o2562, oOrig)) {
-        ulong idx = atomic_inc(match_count);
-        if (idx < max_matches) {
-            if (!(minim256.s3 || minim256.s2 || minim256.s1)) {
-                matches[idx] = RETVAL256;
-            } else {
-                matches[idx] = minim;
-            }
-
-            if (RET_DEBUG_CHECK_256) {
-                printf("6 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
+                    if (RET_DEBUG_CHECK_256) {
+                        printf("6 RETURNING: %lu. oOrig: %lu, minim: %lu, o: %lu\n", RETVAL256, oOrig, minim, o);
+                    }
+                }
             }
         }
+
     }
 
     return;

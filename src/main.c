@@ -160,7 +160,7 @@ static void print_build_log(cl_program program, cl_device_id device) {
 }
 
 // #define KERNELFILE "kernels/search_matches.cl"
-#define KERNELFILE "kernels/v6stupid.cl"
+#define KERNELFILE "kernels/v7.cl"
 
 int main(void) {
     cl_int err;
