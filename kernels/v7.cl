@@ -25,15 +25,16 @@
 // #define RET_DEBUG_CHECK_256 minim256.s0 == 122205635609579
 // #define EARLY_DEBUG oOrig == 406342267
 
+#ifdef __APPLE__
+inline uint ctz(ulong x)
+{
+    if (x == 0UL) {
+        return 64u;
+    }
 
-// inline uint ctz(ulong x)
-// {
-//     if (x == 0UL) {
-//         return 64u;
-//     }
-
-//     return (uint)(63u - clz(x & (~x + 1UL)));
-// }
+    return (uint)(63u - clz(x & (~x + 1UL)));
+}
+#endif
 
 /// U256 Workings
 typedef ulong4 u256;
