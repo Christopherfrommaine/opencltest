@@ -159,9 +159,7 @@ static void print_build_log(cl_program program, cl_device_id device) {
     free(log);
 }
 
-// #define KERNELFILE "kernels/search_matches.cl"
-#define KERNELFILE "kernels/v7.cl"
-
+#define KERNELFILE "kernels/v8.cl"
 int main(void) {
     cl_int err;
 
@@ -170,11 +168,11 @@ int main(void) {
     const uint64_t billion = 1000ULL * million;
     const uint64_t trillion = 1000ULL * billion;
 
-    const uint64_t min = 0ULL * billion;
-    const uint64_t max = 1ULL * billion;
+    const uint64_t min = 0;
+    const uint64_t max = 1ULL * trillion;
 
     // Maximum number to be retured
-    const uint64_t max_matches = 100000 + 0.001 * (max - min);
+    const uint64_t max_matches = 100000 + 0.0001 * (max - min);
 
     cl_uint num_platforms = 0;
     err = clGetPlatformIDs(0, NULL, &num_platforms);
@@ -219,7 +217,8 @@ int main(void) {
                                                    &source_size, &err);
     CHECK_CL(err, "clCreateProgramWithSource");
 
-    err = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+    const char *options = "-cl-mad-enable";
+    err = clBuildProgram(program, 1, &device, options, NULL, NULL);
     if (err != CL_SUCCESS) {
         fprintf(stderr, "Build failed\n");
         print_build_log(program, device);
@@ -327,7 +326,7 @@ int main(void) {
     uint64_t timer_end_dedup_and_print = get_time_micros();
 
     fprintf(stderr, "\n-----\n");
-    fprintf(stderr, "Bounds    | min: %lu, max: %lu, diff: %lu | Procecessed %lu initial coniditions in total.\n", min, max, max - min, (max - min) >> 1);
+    fprintf(stderr, "Bounds    | min: %lu, max: %lu , diff: %lu | Procecessed %lu initial coniditions in total.\n", min, max, max - min, (max - min) >> 1);
     fprintf(stderr, "Matched   | matches: %u, max_matches: %lu (%f%% of Buffer Size)\n", match_count, max_matches, ((float)(100 * match_count))/((float)(max_matches)));
     fprintf(stderr, "Deduped   | deduped: %i | Filtered initial conditions by a factor of %lu thousand.\n", num_deduped, ((max - min) >> 1) / (thousand * num_deduped));
     fprintf(stderr, "Timing    | create_buff: %luus, run_gpu: %luus (%lus), read_buff: %luus, dedup_and_print: %luus (%lus)\n", timer_end_create_buff - timer_start_create_buff, timer_end_run_gpu - timer_start_run_gpu,(timer_end_run_gpu - timer_start_run_gpu) / million, timer_end_read_buff - timer_start_read_buff, timer_end_dedup_and_print - timer_start_dedup_and_print, (timer_end_dedup_and_print - timer_start_dedup_and_print) / million);
