@@ -298,6 +298,15 @@ int main(void) {
                                   sizeof(uint64_t) * to_read,
                                   matches, 0, NULL, NULL);
         CHECK_CL(err, "read matches");
+
+        // Write raw data to disk immediately, before any processing that could crash
+        FILE *raw = fopen("matches_raw.bin", "wb");
+        if (raw) {
+            fwrite(&to_read,  sizeof(uint64_t), 1,       raw);  // header: count
+            fwrite(matches,   sizeof(uint64_t), to_read, raw);
+            fclose(raw);
+            fprintf(stderr, "Raw matches saved to matches_raw.bin\n");
+        }
     }
     uint64_t timer_end_read_buff = get_time_micros();
 
