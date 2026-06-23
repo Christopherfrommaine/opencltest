@@ -1,0 +1,1 @@
+This is a program to search for persistent structures in the code 20 cellular automaton. It is written in C and OpenCL and works on GPUs as well as most CPUs.
