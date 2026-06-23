@@ -3,7 +3,7 @@
 # Job Flags
 #SBATCH -p mit_preemptable
 #SBATCH -G 1
-#SBATCH -t 00:15:00 
+#SBATCH -t 01:00:00 
 module load cuda
 
 make

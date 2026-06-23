@@ -169,7 +169,7 @@ int main(void) {
     const uint64_t trillion = 1000ULL * billion;
 
     const uint64_t min = 0;
-    const uint64_t max = 10ULL * billion;
+    const uint64_t max = 10 * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.00001 * (max - min);
