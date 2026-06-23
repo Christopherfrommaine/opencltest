@@ -394,7 +394,7 @@ int main(void) {
             printf("%lu, \n", all_matches.slots[i]);
         }
     }
-    printf("0}");
+    printf("0}\n");
 
     uint64_t timer_end_print = get_time_micros();
 
