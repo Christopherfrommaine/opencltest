@@ -173,7 +173,7 @@ int main(void) {
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.00001 * (max - min);
-    fprintf(stderr, "allocating %lu (%lu Mb) for buffer", max_matches, max_matches * 8 / million);
+    fprintf(stderr, "allocating %lu (%lu Mb) for buffer\n", max_matches, max_matches * 8 / million);
 
     cl_uint num_platforms = 0;
     err = clGetPlatformIDs(0, NULL, &num_platforms);
