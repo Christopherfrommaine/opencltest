@@ -5,11 +5,11 @@
 
 
 #define DEBUG 0
-#define PRINTIF_CONDITION oOrig == 1244036267
+#define PRINTIF_CONDITION 0
 
 
 
-#define STACK_SIZE 10
+#define STACK_SIZE 8
 #define MAX_STACK_DEPTH 10
 
 

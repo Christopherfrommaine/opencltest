@@ -66,8 +66,8 @@ static uint64_t hash_u64(uint64_t x) {
     return x;
 }
 
-unsigned int next_power_of_2(unsigned int n) {
-    if (n <= 1) return 1;
+uint64_t next_power_of_2(uint64_t n) {
+    if (n <= 1) return 1UL;
 
     n--;
     n |= n >> 1;
@@ -172,7 +172,7 @@ int main(void) {
     const uint64_t max = 10ULL * billion;
 
     // Maximum number to be retured
-    const uint64_t max_matches = 100000 + 0.0001 * (max - min);
+    const uint64_t max_matches = 100000 + 0.00001 * (max - min);
 
     cl_uint num_platforms = 0;
     err = clGetPlatformIDs(0, NULL, &num_platforms);
