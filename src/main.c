@@ -168,11 +168,11 @@ int main(void) {
     const uint64_t billion = 1000ULL * million;
     const uint64_t trillion = 1000ULL * billion;
 
-    const uint64_t min = 5230000000000UL;
-    const uint64_t max = 5240000000000UL;
+    // const uint64_t min = 5230000000000UL;
+    // const uint64_t max = 5240000000000UL;
 
-    // const uint64_t min = 0;
-    // const uint64_t max = 10 * billion;
+    const uint64_t min = 0;
+    const uint64_t max = 10 * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.00001 * (max - min);
@@ -264,16 +264,46 @@ int main(void) {
     err = clSetKernelArg(kernel, 4, sizeof(uint64_t), &max_matches);
     CHECK_CL(err, "arg 4");
 
+    uint64_t batch_size = 1ULL << 31;  // 2^31 = 2,147,483,648
+    uint64_t range = max - min;
+    uint64_t num_batches = (range + batch_size - 1) / batch_size;  // ceiling division
+
+    fprintf(stderr, "Dispatching %lu batches of %lu (total range: %lu)\n", 
+            num_batches, batch_size, range);
+
     uint64_t timer_start_run_gpu = get_time_micros();
 
-    size_t global_work_size = max - min;
-    err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL,
-                                 &global_work_size, NULL,
-                                 0, NULL, NULL);
-    CHECK_CL(err, "clEnqueueNDRangeKernel");
-
-    err = clFinish(queue);
-    CHECK_CL(err, "clFinish");
+    for (uint64_t batch = 0; batch < num_batches; ++batch) {
+        uint64_t batch_min = min + (batch * batch_size);
+        uint64_t batch_max = batch_min + batch_size;
+        
+        // Don't exceed the actual max
+        if (batch_max > max) {
+            batch_max = max;
+        }
+        
+        uint64_t batch_range = batch_max - batch_min;
+        
+        fprintf(stderr, "  [%lu/%lu] Processing [%lu, %lu) — %lu items\n", 
+                batch + 1, num_batches, batch_min, batch_max, batch_range);
+        
+        // Update kernel arguments for this batch
+        err = clSetKernelArg(kernel, 0, sizeof(uint64_t), &batch_min);
+        CHECK_CL(err, "arg 0 (batch min)");
+        
+        err = clSetKernelArg(kernel, 1, sizeof(uint64_t), &batch_max);
+        CHECK_CL(err, "arg 1 (batch max)");
+        
+        // Launch this batch
+        size_t global_work_size = batch_range;
+        err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL,
+                                    &global_work_size, NULL,
+                                    0, NULL, NULL);
+        CHECK_CL(err, "clEnqueueNDRangeKernel batch");
+        
+        err = clFinish(queue);
+        CHECK_CL(err, "clFinish batch");
+    }
 
     uint64_t timer_end_run_gpu = get_time_micros();
     
