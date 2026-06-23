@@ -257,7 +257,7 @@ if (depth && stack_ptr < STACK_SIZE) { \
 } else { \
     ulong idx = atomic_inc(match_count); \
     if (idx < max_matches) { \
-        matches[idx] = oOrig; /* OVERRIDE HERE override pverride  */ \
+        matches[idx] = retval; /* OVERRIDE HERE override pverride  */ \
     } \
 } \
 } while(0)
@@ -520,7 +520,7 @@ __kernel void search_matches(const ulong min_i,
         u256 minim256;
         u256 col256;
 
-        RUN256(10000);
+        RUN256(1000);
 
         PRINTIF("  5.25 o256: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
         PRINTIF("  5.26 count: %u", count);
@@ -534,6 +534,11 @@ __kernel void search_matches(const ulong min_i,
 
         if (o256.s1 == 0 && o256.s2 == 0) {
             RECURSE(o256.s3 >> ctz(o256.s3));
+            RECURSE(o256.s0 >> ctz(o256.s0));
+            continue;
+        }
+        if (o256.s1 == 0 && o256.s3 == 0) {
+            RECURSE(o256.s2 >> ctz(o256.s2));
             RECURSE(o256.s0 >> ctz(o256.s0));
             continue;
         }

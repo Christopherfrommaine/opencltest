@@ -169,7 +169,7 @@ int main(void) {
     const uint64_t trillion = 1000ULL * billion;
 
     const uint64_t min = 0;
-    const uint64_t max = 1ULL * trillion;
+    const uint64_t max = 1ULL * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.0001 * (max - min);
@@ -326,7 +326,7 @@ int main(void) {
     uint64_t timer_end_dedup_and_print = get_time_micros();
 
     fprintf(stderr, "\n-----\n");
-    fprintf(stderr, "Bounds    | min: %lu, max: %lu , diff: %lu | Procecessed %lu initial coniditions in total.\n", min, max, max - min, (max - min) >> 1);
+    fprintf(stderr, "Bounds    | min: %lu, max: %lu  | Procecessed %lu initial coniditions in total.\n", min, max, (max - min) >> 1);
     fprintf(stderr, "Matched   | matches: %u, max_matches: %lu (%f%% of Buffer Size)\n", match_count, max_matches, ((float)(100 * match_count))/((float)(max_matches)));
     fprintf(stderr, "Deduped   | deduped: %i | Filtered initial conditions by a factor of %lu thousand.\n", num_deduped, ((max - min) >> 1) / (thousand * num_deduped));
     fprintf(stderr, "Timing    | create_buff: %luus, run_gpu: %luus (%lus), read_buff: %luus, dedup_and_print: %luus (%lus)\n", timer_end_create_buff - timer_start_create_buff, timer_end_run_gpu - timer_start_run_gpu,(timer_end_run_gpu - timer_start_run_gpu) / million, timer_end_read_buff - timer_start_read_buff, timer_end_dedup_and_print - timer_start_dedup_and_print, (timer_end_dedup_and_print - timer_start_dedup_and_print) / million);
