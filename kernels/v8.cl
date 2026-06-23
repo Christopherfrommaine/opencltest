@@ -1,4 +1,5 @@
 #define TOPMOSTBITSMASK 0xE000000000000000UL
+#define TOPMOSTBITSMASKPLUSSIXTEEN 0xFFFFE00000000000UL
 #define BOTTOMMOSTBITSMASK 0x0000000000000007UL
 
 
@@ -252,7 +253,7 @@ uint gap_pos_gt_four256(u256 n) {
 }
 
 #define RECURSE(retval) do { \
-if (depth && stack_ptr < STACK_SIZE) { \
+if (depth && stack_ptr < STACK_SIZE && (retval) != oStart) { \
     stack_o[stack_ptr] = retval; \
     stack_depth[stack_ptr] = depth - 1; \
     stack_ptr++; \
@@ -286,13 +287,13 @@ inline ulong update64_noshift(ulong o) {
     first = o; \
     minim = o; \
     col = o; \
-    do { \
+    while (minim >= oOrig && (o != first || count == 0) && count < (steps) && (o & TOPMOSTBITSMASK) == 0) { \
         count++; \
         o = update64(o); \
         o = o >> ctz(o); \
         minim = min(minim, o); \
         col = col | o; \
-    } while (minim >= oOrig && o != first && count < (steps) && (o & TOPMOSTBITSMASK) == 0); \
+    } \
 } while (0)
 
 #define RUN64_NOSHIFT(steps) do { \
@@ -300,11 +301,11 @@ inline ulong update64_noshift(ulong o) {
     count = 0; \
     first = o; \
     col = o; \
-    do { \
+    while ((o != first || count == 0) && count < (steps) && (o & TOPMOSTBITSMASK) == 0 && (o & BOTTOMMOSTBITSMASK) == 0) { \
         count++; \
         o = update64_noshift(o); \
         col = col | o; \
-    } while (minim >= oOrig && o != first && count < (steps) && (o & TOPMOSTBITSMASK) == 0 && (o & BOTTOMMOSTBITSMASK) == 0); \
+    } \
 } while (0)
 
 inline u256 update256(const u256 o) {
@@ -320,13 +321,13 @@ inline u256 update256(const u256 o) {
     first256 = o256; \
     minim256 = o256; \
     col256 = o256; \
-    do { \
+    while (u256_ge_u64(minim256, oOrig) && count < (steps) && (o256.s3 & TOPMOSTBITSMASK) == 0 && (u256_ne(o256, first256) || count == 0)) { \
         count++; \
         o256 = update256(o256); \
         o256 = u256_shr_ctz(o256); \
         minim256 = u256_min(minim256, o256); \
         col256 = col256 | o256; \
-    } while (u256_ge_u64(minim256, oOrig) && count < (steps) && (o256.s3 & TOPMOSTBITSMASK) == 0 && u256_ne(o256, first256)); \
+    } \
 } while (0)
 
 __kernel void search_matches(const ulong min_i,
@@ -359,8 +360,10 @@ __kernel void search_matches(const ulong min_i,
 
     while (stack_ptr) {
         stack_ptr--;
-        ulong o = stack_o[stack_ptr];
+        ulong oStart = stack_o[stack_ptr];
         ushort depth = stack_depth[stack_ptr];
+
+        ulong o = oStart;
 
         PRINTIF("  1 DEPTH %u STARTING %lu\n", depth, o);
 
@@ -400,15 +403,19 @@ __kernel void search_matches(const ulong min_i,
             PRINTIF("  3.2\n");
             
             uint period = count;
-            if (((o << 16) & TOPMOSTBITSMASK) == 0) {
+            if ((o & TOPMOSTBITSMASKPLUSSIXTEEN) == 0) {
+                PRINTIF("  3.31 o: %lu\n", o);
+                
                 RUN64_NOSHIFT(period);
+
+                PRINTIF("  3.32 o: %lu\n", o);
 
                 if (o & BOTTOMMOSTBITSMASK || o & TOPMOSTBITSMASK) {
                     RECURSE(minim);
                     continue;
                 };
 
-                PRINTIF("  3.3\n");
+                PRINTIF("  3.33 \n");
 
                 uint colshift = ctz(col);
                 col = col >> colshift;
@@ -427,7 +434,7 @@ __kernel void search_matches(const ulong min_i,
                 }
             }
 
-            PRINTIF("  3.4\n");
+            PRINTIF("  3.4 o: %lu\n", o);
 
             // Full split separate solutions algorithm
             uint gap_pos = 0;
@@ -522,13 +529,14 @@ __kernel void search_matches(const ulong min_i,
         u256 minim256;
         u256 col256;
 
-        RUN256(1000);
+        RUN256(300);
 
-        PRINTIF("  5.25 o256: %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
+        PRINTIF("  5.25 o256:     %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
+        PRINTIF("  5.25 minim256: %lu<>%lu<>%lu<>%lu\n", minim256.s3, minim256.s2, minim256.s1, minim256.s0);
         PRINTIF("  5.26 count: %u", count);
 
-        if (u256_fits_in_ulong(o256)) {
-            RECURSE(o256.s0);
+        if (u256_fits_in_ulong(minim256) && minim256.s0 != minim) {
+            RECURSE(minim256.s0);
             continue;
         }
 
@@ -553,7 +561,7 @@ __kernel void search_matches(const ulong min_i,
             // DEFINITLY PERIODIC
             // Try to separate solutions
 
-            PRINTIF("  6.1\n");
+            PRINTIF("  6.1 col: %lu<>%lu<>%lu<>%lu\n", col256.s3, col256.s2, col256.s1, col256.s0);
 
             gap_pos_col = gap_pos_gt_four256(col256);
             if (gap_pos_col != 256) {
