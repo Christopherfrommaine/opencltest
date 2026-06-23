@@ -351,7 +351,7 @@ int main(void) {
 
     uint64_t timer_start_dedup_and_print = get_time_micros();
     HashSet seen;
-    if (!hashset_init(&seen, next_power_of_2(1.2 * max_matches))) {
+    if (!hashset_init(&seen, next_power_of_2(2 * ((uint64_t)(match_count))))) {
         return 1;
     }
 

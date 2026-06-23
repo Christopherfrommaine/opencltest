@@ -180,11 +180,8 @@ int main(void) {
     const uint64_t billion = 1000ULL * million;
     const uint64_t trillion = 1000ULL * billion;
 
-    // const uint64_t min = 5230000000000UL;
-    // const uint64_t max = 5240000000000UL;
-
     const uint64_t min = 0;
-    const uint64_t max = 30 * billion;
+    const uint64_t max = 100 * trillion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.00001 * (max - min);
@@ -296,12 +293,22 @@ int main(void) {
                 batch + 1, num_batches, batch_min, batch_max);
 
         // Launch on ALL devices in parallel
+        uint64_t device_range = batch_range / num_devices;
+
         for (cl_uint dev = 0; dev < num_devices; dev++) {
             GPUContext *ctx = &gpu_contexts[dev];
 
-            err = clSetKernelArg(ctx->kernel, 0, sizeof(uint64_t), &batch_min);
+            // Divide this batch among devices
+            uint64_t dev_batch_min = batch_min + (dev * device_range);
+            uint64_t dev_batch_max = (dev == num_devices - 1) 
+                                    ? batch_max  // Last device gets remainder
+                                    : dev_batch_min + device_range;
+
+            fprintf(stderr, "    Device %u: [%lu, %lu)\n", dev, dev_batch_min, dev_batch_max);
+
+            err = clSetKernelArg(ctx->kernel, 0, sizeof(uint64_t), &dev_batch_min);
             CHECK_CL(err, "arg 0");
-            err = clSetKernelArg(ctx->kernel, 1, sizeof(uint64_t), &batch_max);
+            err = clSetKernelArg(ctx->kernel, 1, sizeof(uint64_t), &dev_batch_max);
             CHECK_CL(err, "arg 1");
             err = clSetKernelArg(ctx->kernel, 2, sizeof(cl_mem), &ctx->matches_buf);
             CHECK_CL(err, "arg 2");
@@ -310,7 +317,7 @@ int main(void) {
             err = clSetKernelArg(ctx->kernel, 4, sizeof(uint64_t), &max_matches);
             CHECK_CL(err, "arg 4");
 
-            size_t global_work_size = batch_range;
+            size_t global_work_size = dev_batch_max - dev_batch_min;
             err = clEnqueueNDRangeKernel(ctx->queue, ctx->kernel, 1, NULL,
                                         &global_work_size, NULL,
                                         0, NULL, NULL);
