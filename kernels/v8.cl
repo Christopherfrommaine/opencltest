@@ -46,17 +46,28 @@ inline int u256_is_zero(const u256 x)
     return (x.s0 | x.s1 | x.s2 | x.s3) == 0UL;
 }
 
+inline int u256_ne(const u256 a, const u256 b)
+{
+    return (a.s0 != b.s0) | (a.s1 != b.s1) | (a.s2 != b.s2) | (a.s3 != b.s3);
+}
+
+inline int u256_eq(const u256 a, const u256 b)
+{
+    return (a.s0 == b.s0) & (a.s1 == b.s1) & (a.s2 == b.s2) & (a.s3 == b.s3);
+}
+
 inline int u256_ge_u64(const u256 a, const ulong b)
 {
-    return (a.s1 || a.s2 || a.s3 || a.s0 >= b);
+    return (int)((a.s1 | a.s2 | a.s3) != 0UL) | (int)(a.s0 >= b);
 }
 
 inline int u256_lt(const u256 a, const u256 b)
 {
-    if (a.s3 != b.s3) return a.s3 < b.s3;
-    if (a.s2 != b.s2) return a.s2 < b.s2;
-    if (a.s1 != b.s1) return a.s1 < b.s1;
-    return a.s0 < b.s0;
+    int lt3 = a.s3 < b.s3,  eq3 = a.s3 == b.s3;
+    int lt2 = a.s2 < b.s2,  eq2 = a.s2 == b.s2;
+    int lt1 = a.s1 < b.s1,  eq1 = a.s1 == b.s1;
+    int lt0 = a.s0 < b.s0;
+    return lt3 | (eq3 & (lt2 | (eq2 & (lt1 | (eq1 & lt0)))));
 }
 
 inline u256 u256_min(const u256 a, const u256 b)
@@ -197,6 +208,7 @@ inline u256 u256_shr(const u256 x, const uint n)
 
 inline u256 u256_shr_ctz(const u256 x)
 {
+    if (x.s0 & 1UL) return x;
     if (x.s0) return u256_shr_bits_lt64(x, ctz(x.s0));
     if (x.s1) return u256_shr_bits_lt64((u256)(x.s1, x.s2, x.s3, 0UL), ctz(x.s1));
     if (x.s2) return u256_shr_bits_lt64((u256)(x.s2, x.s3, 0UL, 0UL), ctz(x.s2));
@@ -204,19 +216,9 @@ inline u256 u256_shr_ctz(const u256 x)
     return U256_ZERO;
 }
 
-inline int u256_eq(const u256 a, const u256 b)
-{
-    return (a.s0 == b.s0) && (a.s1 == b.s1) && (a.s2 == b.s2) && (a.s3 == b.s3);
-}
-
-inline int u256_ne(const u256 a, const u256 b)
-{
-    return (a.s0 != b.s0) || (a.s1 != b.s1) || (a.s2 != b.s2) || (a.s3 != b.s3);
-}
-
 inline bool u256_fits_in_ulong(const u256 a)
 {
-    return !(a.s1 || a.s2 || a.s3);
+    return !(a.s1 | a.s2 | a.s3);
 }
 
 
@@ -237,13 +239,13 @@ inline bool u256_fits_in_ulong(const u256 a)
 
 
 
-ushort gap_pos_gt_four(ulong n) {
+uint gap_pos_gt_four(ulong n) {
     ulong col = (~n) & (~0UL >> clz(n));  // mask off leading zeros of n
     col = (col) & (col << 1) & (col << 2) & (col << 3);
     return ctz(col);
 }
 
-ushort gap_pos_gt_four256(u256 n) {
+uint gap_pos_gt_four256(u256 n) {
     u256 col = (~n) & u256_significant_bits_mask(n);  // mask off leading zeros of n
     col = col & u256_shl_1(col) & u256_shl_2(col) & u256_shl_3(col);
     return u256_ctz(col);
@@ -278,18 +280,19 @@ inline ulong update64_noshift(ulong o) {
     return (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
 }
 
+
 #define RUN64(steps) do { \
     count = 0; \
     first = o; \
     minim = o; \
     col = o; \
-    while (minim >= oOrig && count < (steps) && (o & TOPMOSTBITSMASK) == 0 && (o != first || count == 0)) { \
+    do { \
         count++; \
         o = update64(o); \
         o = o >> ctz(o); \
         minim = min(minim, o); \
         col = col | o; \
-    } \
+    } while (minim >= oOrig && o != first && count < (steps) && (o & TOPMOSTBITSMASK) == 0); \
 } while (0)
 
 #define RUN64_NOSHIFT(steps) do { \
@@ -297,11 +300,11 @@ inline ulong update64_noshift(ulong o) {
     count = 0; \
     first = o; \
     col = o; \
-    while (minim >= oOrig && count < (steps) && (o & TOPMOSTBITSMASK) == 0 && (o & BOTTOMMOSTBITSMASK) == 0 && (o != first || count == 0)) { \
+    do { \
         count++; \
         o = update64_noshift(o); \
         col = col | o; \
-    } \
+    } while (minim >= oOrig && o != first && count < (steps) && (o & TOPMOSTBITSMASK) == 0 && (o & BOTTOMMOSTBITSMASK) == 0); \
 } while (0)
 
 inline u256 update256(const u256 o) {
@@ -317,13 +320,13 @@ inline u256 update256(const u256 o) {
     first256 = o256; \
     minim256 = o256; \
     col256 = o256; \
-    while (u256_ge_u64(minim256, oOrig) && count < (steps) && (o256.s3 & TOPMOSTBITSMASK) == 0 && (u256_ne(o256, first256) || count == 0)) { \
+    do { \
         count++; \
         o256 = update256(o256); \
-        o256 = u256_small_shr(o256, u256_ctz(o256)); \
+        o256 = u256_shr_ctz(o256); \
         minim256 = u256_min(minim256, o256); \
         col256 = col256 | o256; \
-    } \
+    } while (u256_ge_u64(minim256, oOrig) && count < (steps) && (o256.s3 & TOPMOSTBITSMASK) == 0 && u256_ne(o256, first256)); \
 } while (0)
 
 __kernel void search_matches(const ulong min_i,
@@ -384,7 +387,6 @@ __kernel void search_matches(const ulong min_i,
             if (gap_pos_col != 64) {
                 ulong o1 = o & (~0UL >> (64 - gap_pos_col));
                 ulong o2 = o >> gap_pos_col;
-                o1 = o1 >> ctz(o1);
                 o2 = o2 >> ctz(o2);
 
                 PRINTIF("  3.15 recursing with: col: %lu, gap: %u, o1: %lu, o2: %lu\n", col, gap_pos_col, o1, o2);
@@ -416,7 +418,6 @@ __kernel void search_matches(const ulong min_i,
                 if (gap_pos_col != 64) {
                     ulong o1 = o & (~0UL >> (64 - gap_pos_col));
                     ulong o2 = o >> gap_pos_col;
-                    o1 = o1 >> ctz(o1);
                     o2 = o2 >> ctz(o2);
 
                     RECURSE(o1);
@@ -431,11 +432,13 @@ __kernel void search_matches(const ulong min_i,
             // Full split separate solutions algorithm
             uint gap_pos = 0;
             bool finished = true;
+            ulong lower_mask = 0;
             while (gap_pos < 64) {
                 gap_pos++;
+                lower_mask = (lower_mask << 1) | 1;
                 
-                ulong o_lower = o &  ((1UL << gap_pos) - 1);
-                ulong o_upper = o & ~((1UL << gap_pos) - 1);
+                ulong o_lower = o &  lower_mask;
+                ulong o_upper = o & ~lower_mask;
                 ulong o_full  = o;
 
                 PRINTIF("    3.5 pos: %u, upper: %lu, lower: %lu\n", gap_pos, o_upper, o_lower);
@@ -503,7 +506,6 @@ __kernel void search_matches(const ulong min_i,
         if (gap_pos_col != 64) {
             ulong o1 = o & (~0UL >> (64 - gap_pos_col));
             ulong o2 = o >> gap_pos_col;
-            o1 = o1 >> ctz(o1);
             o2 = o2 >> ctz(o2);
 
             RECURSE(o1);
@@ -555,10 +557,9 @@ __kernel void search_matches(const ulong min_i,
 
             gap_pos_col = gap_pos_gt_four256(col256);
             if (gap_pos_col != 256) {
-                u256 o1 = o256 & u256_shr(~0UL, (256 - gap_pos_col));
+                u256 o1 = o256 & u256_low_bits_mask(gap_pos_col);
                 u256 o2 = u256_shr(o256, gap_pos_col);
-                o1 = u256_shr(o1, u256_ctz(o1));
-                o2 = u256_shr(o2, u256_ctz(o2));
+                o2 = u256_shr_ctz(o2);
 
                 // match all possible cases
                 if (u256_fits_in_ulong(o1)) {
@@ -587,10 +588,12 @@ __kernel void search_matches(const ulong min_i,
             // Full split separate solutions algorithm
             uint gap_pos = 0;
             bool finished = true;
+            u256 lower_mask = U256_ZERO;
             while (gap_pos < 256) {
                 gap_pos++;
+                lower_mask = u256_shl_1(lower_mask);
+                lower_mask.s0 = lower_mask.s0 | 1;
                 
-                u256 lower_mask = u256_low_bits_mask(gap_pos);
                 u256 o_lower = o256 &  lower_mask;
                 u256 o_upper = o256 & ~lower_mask;
                 u256 o_full  = o256;
@@ -616,16 +619,12 @@ __kernel void search_matches(const ulong min_i,
                 if (splittable) {
                     PRINTIF("    6.6 split worked!\n");
 
-                    o_lower = o_lower >> ctz(o_lower);
-                    o_upper = o_upper >> ctz(o_upper);
+                    o_lower = u256_shr_ctz(o_lower);
+                    o_upper = u256_shr_ctz(o_upper);
 
                     if (u256_fits_in_ulong(o_lower) && u256_fits_in_ulong(o_upper)) {
                         RECURSE(o_lower.s0);
                         RECURSE(o_upper.s0);
-                        continue;
-                    } else {
-                        depth = 0;
-                        RECURSE(minim);
                         continue;
                     }
 

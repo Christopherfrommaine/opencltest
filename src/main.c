@@ -169,7 +169,7 @@ int main(void) {
     const uint64_t trillion = 1000ULL * billion;
 
     const uint64_t min = 0;
-    const uint64_t max = 1ULL * billion;
+    const uint64_t max = 10ULL * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.0001 * (max - min);
@@ -326,6 +326,7 @@ int main(void) {
     uint64_t timer_end_dedup_and_print = get_time_micros();
 
     fprintf(stderr, "\n-----\n");
+
     fprintf(stderr, "Bounds    | min: %lu, max: %lu  | Procecessed %lu initial coniditions in total.\n", min, max, (max - min) >> 1);
     fprintf(stderr, "Matched   | matches: %u, max_matches: %lu (%f%% of Buffer Size)\n", match_count, max_matches, ((float)(100 * match_count))/((float)(max_matches)));
     fprintf(stderr, "Deduped   | deduped: %i | Filtered initial conditions by a factor of %lu thousand.\n", num_deduped, ((max - min) >> 1) / (thousand * num_deduped));
