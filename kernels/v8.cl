@@ -5,8 +5,8 @@
 
 
 
-#define DEBUG 0
-#define PRINTIF_CONDITION 0
+#define DEBUG 1
+#define PRINTIF_CONDITION oOrig == 10468824179883
 
 
 
@@ -260,7 +260,7 @@ if (depth && stack_ptr < STACK_SIZE && (retval) != oStart) { \
 } else { \
     ulong idx = atomic_inc(match_count); \
     if (idx < max_matches) { \
-        matches[idx] = retval; /* OVERRIDE HERE override pverride  */ \
+        matches[idx] = minim; /* OVERRIDE HERE override pverride  */ \
     } \
 } \
 } while(0)
@@ -380,11 +380,11 @@ __kernel void search_matches(const ulong min_i,
         PRINTIF("  2 After first run: %lu\n", o);
 
         uint gap_pos_col;
-        if (first == o) {
+        if (first == o && count != 0) {
             // DEFINITLY PERIODIC
             // Try to separate solutions
 
-            PRINTIF("  3.1\n");
+            PRINTIF("  3.1 first: %lu, o: %lu, minim: %lu, count: %u\n", first, o, minim, count);
 
             gap_pos_col = gap_pos_gt_four(col);
             if (gap_pos_col != 64) {
@@ -440,13 +440,18 @@ __kernel void search_matches(const ulong min_i,
             uint gap_pos = 0;
             bool finished = true;
             ulong lower_mask = 0;
+            ulong last = 0;
             while (gap_pos < 64) {
                 gap_pos++;
                 lower_mask = (lower_mask << 1) | 1;
-                
+
+
                 ulong o_lower = o &  lower_mask;
                 ulong o_upper = o & ~lower_mask;
                 ulong o_full  = o;
+
+                if (o_lower == last) { continue; }
+                last = o_lower;
 
                 PRINTIF("    3.5 pos: %u, upper: %lu, lower: %lu\n", gap_pos, o_upper, o_lower);
 
@@ -461,8 +466,19 @@ __kernel void search_matches(const ulong min_i,
 
                     if (o_full != (o_upper ^ o_lower)) {
                         splittable = false;
-                        PRINTIF("    3.55 split did not work!\n");
+                        PRINTIF("    3.55 split did not work! full: %lu, xored: %lu, lower: %lu, upper: %lu\n", o_full, o_lower ^ o_upper, o_lower, o_upper);
                         break;
+                    }
+
+                    if ((o_full & TOPMOSTBITSMASK) != 0) {
+                        uint ctzmin = min(ctz(o_upper), ctz(o_lower));
+                        o_full = o_full >> ctzmin;
+                        if ((o_full & TOPMOSTBITSMASK) != 0) {
+                            continue;
+                        }
+
+                        o_lower = o_lower >> ctzmin;
+                        o_upper = o_upper >> ctzmin;
                     }
                 }
 
@@ -529,11 +545,11 @@ __kernel void search_matches(const ulong min_i,
         u256 minim256;
         u256 col256;
 
-        RUN256(300);
+        RUN256(420);
 
         PRINTIF("  5.25 o256:     %lu<>%lu<>%lu<>%lu\n", o256.s3, o256.s2, o256.s1, o256.s0);
-        PRINTIF("  5.25 minim256: %lu<>%lu<>%lu<>%lu\n", minim256.s3, minim256.s2, minim256.s1, minim256.s0);
-        PRINTIF("  5.26 count: %u", count);
+        PRINTIF("  5.26 minim256: %lu<>%lu<>%lu<>%lu\n", minim256.s3, minim256.s2, minim256.s1, minim256.s0);
+        PRINTIF("  5.27 count: %u", count);
 
         if (u256_fits_in_ulong(minim256) && minim256.s0 != minim) {
             RECURSE(minim256.s0);
@@ -597,6 +613,7 @@ __kernel void search_matches(const ulong min_i,
             uint gap_pos = 0;
             bool finished = true;
             u256 lower_mask = U256_ZERO;
+            u256 last = U256_ZERO;
             while (gap_pos < 256) {
                 gap_pos++;
                 lower_mask = u256_shl_1(lower_mask);
@@ -607,6 +624,8 @@ __kernel void search_matches(const ulong min_i,
                 u256 o_full  = o256;
 
                 PRINTIF("    6.5 pos: %u\n", gap_pos);
+                if (u256_eq(last, o_lower)) { continue; }
+                last = o_lower;
 
                 if (u256_is_zero(o_lower)) { continue; }
                 if (u256_is_zero(o_upper)) { break; }
@@ -621,6 +640,17 @@ __kernel void search_matches(const ulong min_i,
                         splittable = false;
                         PRINTIF("    6.55 split did not work!\n");
                         break;
+                    }
+
+                    if ((o_full.s3 & TOPMOSTBITSMASK) != 0) {
+                        uint ctzmin = min(u256_ctz(o_upper), u256_ctz(o_lower));
+                        o_full = u256_shr(o_full, ctzmin);
+                        if ((o_full.s3 & TOPMOSTBITSMASK) != 0) {
+                            continue;
+                        }
+
+                        o_lower = u256_shr(o_lower, ctzmin);
+                        o_upper = u256_shr(o_upper, ctzmin);
                     }
                 }
 
