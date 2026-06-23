@@ -172,7 +172,7 @@ int main(void) {
     // const uint64_t max = 5240000000000UL;
 
     const uint64_t min = 0;
-    const uint64_t max = 10 * billion;
+    const uint64_t max = 30 * billion;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100000 + 0.00001 * (max - min);
