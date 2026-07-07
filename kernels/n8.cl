@@ -3,15 +3,13 @@
 #define BOTTOMMOSTBITSMASK 0x0000000000000007UL
 
 
-
-
 #define DEBUG 0
-#define PRINTIF_CONDITION oOrig == 10469510870511
+#define PRINTIF_CONDITION oOrig == 1239
 
 
 
-#define STACK_SIZE 8
-#define MAX_STACK_DEPTH 10
+#define STACK_SIZE 20
+#define MAX_STACK_DEPTH 20
 
 
 
@@ -252,33 +250,53 @@ uint gap_pos_gt_four256(u256 n) {
     return u256_ctz(col);
 }
 
+
+// override Override pverride overide
 #define RECURSE(retval) do { \
 if (depth && stack_ptr < STACK_SIZE && (retval) != oStart) { \
     stack_o[stack_ptr] = retval; \
     stack_depth[stack_ptr] = depth - 1; \
     stack_ptr++; \
 } else { \
-    ulong idx = atomic_inc(match_count); \
-    if (idx < max_matches) { \
-        matches[idx] = minim; /* OVERRIDE HERE override pverride  */ \
+    if (minim == oOrig || minim > (max_i << 1)) { \
+        ulong idx = atomic_inc(match_count); \
+        if (idx <= max_matches) { \
+            matches[idx] = minim; \
+        } \
     } \
 } \
 } while(0)
+
+// rule 2783211032
+#define RULE (a & b & ~c & ~e) | (a & ~b & d & ~e) | (a & c & e) | (~a & b & ~c & \
+d) | (~a & b & d & ~e) | (~a & b & ~d & e) | (~a & ~b & c & ~d & ~e) \
+| (~a & ~c & d & e)
+
+// // rule 2038859416
+// #define RULE (a & b)^(d & e)^((c^(a | b)) & (c^(d | e)))  // this simplified form was found by an LLM
+
+// // code 20
+// #define RULE (a | b | c | d | e) & ~(a ^ b ^ c ^ d ^ e)
+
+// // rule 635846232
+// #define RULE c^(a & b)^(a & c)^(a & d)^(a & e)^(b & d)^(b & e)^(c & e)^(d & e)^(a & b & c)^(a & b & e)^(a & c & e)^(a & d & e)^(c & d & e)
 
 inline ulong update64(ulong o) {
     ulong a = o << 3;
     ulong b = o << 2;
     ulong c = o << 1;
-    ulong d = o >> 1;
-    return (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+    ulong d = o;
+    ulong e = o >> 1;
+    return RULE;
 }
 
 inline ulong update64_noshift(ulong o) {
     ulong a = o << 2;
     ulong b = o << 1;
-    ulong c = o >> 1;
-    ulong d = o >> 2;
-    return (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+    ulong c = o;
+    ulong d = o >> 1;
+    ulong e = o >> 2;
+    return RULE;
 }
 
 
@@ -290,6 +308,7 @@ inline ulong update64_noshift(ulong o) {
     while (minim >= oOrig && (o != first || count == 0) && count < (steps) && (o & TOPMOSTBITSMASK) == 0) { \
         count++; \
         o = update64(o); \
+        PRINTIF("      o: %lu\n", o); \
         o = o >> ctz(o); \
         minim = min(minim, o); \
         col = col | o; \
@@ -312,8 +331,9 @@ inline u256 update256(const u256 o) {
     u256 a = u256_shl_3(o);
     u256 b = u256_shl_2(o);
     u256 c = u256_shl_1(o);
-    u256 d = u256_shr_1(o);
-    return (a | b | c | d | o) ^ (a ^ b ^ c ^ d ^ o);
+    u256 d = o;
+    u256 e = u256_shr_1(o);
+    return RULE;
 }
 
 #define RUN256(steps) do { \
@@ -352,7 +372,7 @@ __kernel void search_matches(const ulong min_i,
     ushort stack_depth[STACK_SIZE];
     ushort stack_ptr = 0;
 
-    PRINTIF("  continuing...");
+    PRINTIF("  continuing...\n");
 
     stack_o[stack_ptr] = oOrig;
     stack_depth[stack_ptr] = MAX_STACK_DEPTH;

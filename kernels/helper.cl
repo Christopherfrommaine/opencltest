@@ -1,7 +1,3 @@
-#define TOPMOSTBITSMASK 0xE000000000000000UL
-#define BOTTOMMOSTBITSMASK 0x0000000000000007UL
-
-
 #ifdef __APPLE__
 inline uint ctz(ulong x)
 {
@@ -24,27 +20,45 @@ ulong reverse_bits(ulong x) {
 }
 
 
+
 /// U256 Workings
 typedef ulong4 u256;
 
 #define U256_ZERO ((u256)(0UL, 0UL, 0UL, 0UL))
+#define U256_MAX ((u256)(0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL, 0xFFFFFFFFFFFFFFFFUL))
 
 inline int u256_is_zero(const u256 x)
 {
-    return (x.s0 | x.s1 | x.s2 | x.s3) == 0UL;
+    return !(x.s0 | x.s1 | x.s2 | x.s3);
+}
+
+inline int u256_is_nonzero(const u256 x)
+{
+    return (x.s0 | x.s1 | x.s2 | x.s3);
+}
+
+inline int u256_ne(const u256 a, const u256 b)
+{
+    return u256_is_nonzero(a ^ b);
+}
+
+inline int u256_eq(const u256 a, const u256 b)
+{
+    return u256_is_zero(a ^ b);
 }
 
 inline int u256_ge_u64(const u256 a, const ulong b)
 {
-    return (a.s1 || a.s2 || a.s3 || a.s0 >= b);
+    return (a.s1 | a.s2 | a.s3) || (a.s0 >= b);
 }
 
 inline int u256_lt(const u256 a, const u256 b)
 {
-    if (a.s3 != b.s3) return a.s3 < b.s3;
-    if (a.s2 != b.s2) return a.s2 < b.s2;
-    if (a.s1 != b.s1) return a.s1 < b.s1;
-    return a.s0 < b.s0;
+    int lt3 = a.s3 < b.s3,  eq3 = a.s3 == b.s3;
+    int lt2 = a.s2 < b.s2,  eq2 = a.s2 == b.s2;
+    int lt1 = a.s1 < b.s1,  eq1 = a.s1 == b.s1;
+    int lt0 = a.s0 < b.s0;
+    return lt3 | (eq3 & (lt2 | (eq2 & (lt1 | (eq1 & lt0)))));
 }
 
 inline u256 u256_min(const u256 a, const u256 b)
@@ -142,6 +156,16 @@ inline uint u256_ctz(const u256 x)
     return 256u;
 }
 
+inline uint u256_clz(const u256 x)
+{
+    if (u256_is_zero(x)) {return 256;}
+    if (x.s3 != 0UL) {return clz(x.s3);}
+    if (x.s2 != 0UL) {return 64u + clz(x.s2);}
+    if (x.s1 != 0UL) {return 128u + clz(x.s1);}
+    if (x.s0 != 0UL) {return 192u + clz(x.s0);}
+    return 256u;
+}
+
 inline u256 u256_significant_bits_mask(const u256 n)
 {
     if (n.s3) return (u256)(~0UL, ~0UL, ~0UL, ~0UL >> clz(n.s3));
@@ -183,67 +207,43 @@ inline u256 u256_shr(const u256 x, const uint n)
     return u256_shr_bits_lt64(y, r);
 }
 
-inline u256 u256_shr_ctz(const u256 x)
-{
-    if (x.s0) return u256_shr_bits_lt64(x, ctz(x.s0));
-    if (x.s1) return u256_shr_bits_lt64((u256)(x.s1, x.s2, x.s3, 0UL), ctz(x.s1));
-    if (x.s2) return u256_shr_bits_lt64((u256)(x.s2, x.s3, 0UL, 0UL), ctz(x.s2));
-    if (x.s3) return (u256)(x.s3 >> ctz(x.s3), 0UL, 0UL, 0UL);
-    return U256_ZERO;
-}
-
-inline int u256_eq(const u256 a, const u256 b)
-{
-    return (a.s0 == b.s0) && (a.s1 == b.s1) && (a.s2 == b.s2) && (a.s3 == b.s3);
-}
-
-inline int u256_ne(const u256 a, const u256 b)
-{
-    return (a.s0 != b.s0) || (a.s1 != b.s1) || (a.s2 != b.s2) || (a.s3 != b.s3);
-}
-
 inline bool u256_fits_in_ulong(const u256 a)
 {
-    return !(a.s1 || a.s2 || a.s3);
+    return !(a.s1 | a.s2 | a.s3);
 }
 
 
 
+inline u256 u256_shl_bits_lt64(const u256 x, const uint n)
+{
+    if (n == 0u) return x;
+
+    const uint r = 64u - n;
+
+    return (u256)(
+        x.s0 << n,
+        (x.s1 << n) | (x.s0 >> r),
+        (x.s2 << n) | (x.s1 >> r),
+        (x.s3 << n) | (x.s2 >> r)
+    );
+}
+
+inline u256 u256_shl(const u256 x, const uint n)
+{
+    const uint q = n >> 6;
+    const uint r = n & 63u;
+
+    u256 y =
+        (q == 0u) ? x :
+        (q == 1u) ? (u256)(0UL, x.s0, x.s1, x.s2) :
+        (q == 2u) ? (u256)(0UL, 0UL, x.s0, x.s1) :
+        (q == 3u) ? (u256)(0UL, 0UL, 0UL, x.s0) :
+                    U256_ZERO;
+
+    return u256_shl_bits_lt64(y, r);
+}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+u256 u256_reverse_bits(u256 x) {
+    return (u256)(reverse_bits(x.s3), reverse_bits(x.s2), reverse_bits(x.s1), reverse_bits(x.s0));
+}

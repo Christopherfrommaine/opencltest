@@ -159,7 +159,7 @@ static void print_build_log(cl_program program, cl_device_id device) {
     free(log);
 }
 
-#define KERNELFILE "kernels/v8.cl"
+#define KERNELFILE "kernels/kernel.cl"
 int main(void) {
     cl_int err;
 
@@ -172,10 +172,10 @@ int main(void) {
     // const uint64_t max = 5240000000000UL;
 
     const uint64_t min = 0;
-    const uint64_t max = 30 * billion;
+    const uint64_t max = billion;
 
     // Maximum number to be retured
-    const uint64_t max_matches = 100000 + 0.00001 * (max - min);
+    const uint64_t max_matches = 100 * million;
     fprintf(stderr, "allocating %lu (%lu Mb) for buffer\n", max_matches, max_matches * 8 / million);
 
     cl_uint num_platforms = 0;
@@ -344,11 +344,6 @@ int main(void) {
     }
     uint64_t timer_end_read_buff = get_time_micros();
 
-                // uint64_t oOrig = matches[i];
-            // if (oOrig == 222678959859ULL || oOrig == 595703ULL || oOrig == 610999ULL) {
-            //     printf("out: %lu\n", oOrig);
-            // }
-
     uint64_t timer_start_dedup_and_print = get_time_micros();
     HashSet seen;
     if (!hashset_init(&seen, next_power_of_2(2 * ((uint64_t)(match_count))))) {
@@ -357,8 +352,9 @@ int main(void) {
 
     int num_deduped = 0;
     printf("{");
-    for (uint64_t i = 0; i < match_count; ++i) {
-        if (matches[i] != 0 && hashset_insert(&seen, matches[i])) {
+
+    for (uint64_t i = 0; i < to_read; ++i) {
+        if (0 | (matches[i] != 0 && hashset_insert(&seen, matches[i]))) {
             printf("%lu, \n", matches[i]);
             num_deduped++;
         }
@@ -372,13 +368,13 @@ int main(void) {
 
     fprintf(stderr, "Bounds    | min: %lu, max: %lu  | Procecessed %lu initial coniditions in total.\n", min, max, (max - min) >> 1);
     fprintf(stderr, "Matched   | matches: %u, max_matches: %lu (%f%% of Buffer Size)\n", match_count, max_matches, ((float)(100 * match_count))/((float)(max_matches)));
-    fprintf(stderr, "Deduped   | deduped: %i | Filtered initial conditions by a factor of %lu thousand.\n", num_deduped, ((max - min) >> 1) / (thousand * num_deduped));
+    fprintf(stderr, "Deduped   | deduped: %i | Filtered initial conditions by a factor of %lu thousand.\n", num_deduped, ((max - min) >> 1) / (1 + thousand * num_deduped));
     fprintf(stderr, "Timing    | create_buff: %luus, run_gpu: %luus (%lus), read_buff: %luus, dedup_and_print: %luus (%lus)\n", timer_end_create_buff - timer_start_create_buff, timer_end_run_gpu - timer_start_run_gpu,(timer_end_run_gpu - timer_start_run_gpu) / million, timer_end_read_buff - timer_start_read_buff, timer_end_dedup_and_print - timer_start_dedup_and_print, (timer_end_dedup_and_print - timer_start_dedup_and_print) / million);
 
 
 
     if (match_count >= max_matches) {
-        fprintf(stderr, "WARNING! BUFFER EXCEEDED! SOME INITIAL CONDITIONS HAVE BEEN LOST.");
+        fprintf(stderr, "WARNING! BUFFER EXCEEDED! SOME INITIAL CONDITIONS HAVE BEEN LOST.\n");
     }
 
     free(matches);
