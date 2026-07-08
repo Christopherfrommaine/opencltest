@@ -172,7 +172,7 @@ int main(void) {
     // const uint64_t max = 5240000000000UL;
 
     const uint64_t min = 0;
-    const uint64_t max = billion;
+    const uint64_t max = million;
 
     // Maximum number to be retured
     const uint64_t max_matches = 100 * million;
@@ -284,7 +284,7 @@ int main(void) {
         
         uint64_t batch_range = batch_max - batch_min;
         
-        fprintf(stderr, "  [%lu/%lu] Processing [%lu, %lu) — %lu items\n", 
+        fprintf(stderr, "  [%lu/%lu] Processing [%lu, %lu) -- %lu items\n", 
                 batch + 1, num_batches, batch_min, batch_max, batch_range);
         
         // Update kernel arguments for this batch

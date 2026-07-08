@@ -247,36 +247,35 @@ inline u256 u256_shl(const u256 x, const uint n)
 u256 u256_reverse_bits(u256 x) {
     return (u256)(reverse_bits(x.s3), reverse_bits(x.s2), reverse_bits(x.s1), reverse_bits(x.s0));
 }
-#define BITS 2
+#define BITS 1
 
-#define K 3
+#define K 2
 
-#define R 1
+#define R 2
 
 
 #define SYMMETRIC 1
 
 
-#define TOPMOSTBITSMASK 0xFC00000000000000ULL
+#define TOPMOSTBITSMASK 0xF800000000000000ULL
 
-#define BOTTOMMOSTBITSMASK 0x0000000000000003ULL
+#define BOTTOMMOSTBITSMASK 0x0000000000000007ULL
 
-#define BOTTOMBITSMASK 0x0000000000000003ULL
+#define BOTTOMBITSMASK 0x0000000000000001ULL
 
 
-#define NTHBITSMASK (u256)(0x5555555555555555ULL, 0x5555555555555555ULL, 0x5555555555555555ULL, 0x5555555555555555ULL)
+#define NTHBITSMASK (u256)(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL)
 
 static inline void update256(u256 *restrict oPoint) {
     u256 o = *oPoint;
 
-    u256 a1 = u256_shr(o, 1);
-    u256 a2 = o;
-    u256 a3 = u256_shl(o, 1);
-    u256 a4 = u256_shl(o, 2);
-    u256 a5 = u256_shl(o, 3);
-    u256 a6 = u256_shl(o, 4);
+    u256 a1 = o;
+    u256 a2 = u256_shl(o, 1);
+    u256 a3 = u256_shl(o, 2);
+    u256 a4 = u256_shl(o, 3);
+    u256 a5 = u256_shl(o, 4);
 
-    *oPoint = u256_shl(((~a2 & ((a1 & ((~a5 & a3 & a6) | (~a3 & a4 & a5))) | (~a1 & ~a3 & ~(a4 & a6) & (a4 | a6) & ~a5))) | (~a1 & a2 & ((a3 & a5) | (~a3 & ~a4 & ~a5 & ~a6)))) & NTHBITSMASK, 1) | u256_shl((~(a1 & a2) & ~(a1 & a3 & a6) & (~a1 | a3 | ~a4 | ~a5) & (a1 | a2 | a3 | a4) & (a1 | a2 | a3 | a5) & (a1 | a2 | a5 | a6) & (a1 | a3 | a4 | a5) & (a1 | a3 | a5 | a6) & ~(a2 & a3 & a5) & (a3 | a4 | a5 | a6)) & NTHBITSMASK, 0);
+    *oPoint = ((a1 & a2) ^ (a1 & a3) ^ (a1 & a4) ^ (a1 & a5)) | (~a1 & ((a3 & a2) ^ (a4 & a2) ^ (a4 & a3) ^ (a4 & a5) ^ (a5 & a2) ^ (a5 & a3) ^ (a4 & a3 & a2) ^ (a4 & a5 & a2) ^ (a4 & a5 & a3) ^ (a5 & a3 & a2) ^ (a4 & a5 & a3 & a2)));
 }
 
 
