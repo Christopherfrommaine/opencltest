@@ -275,7 +275,7 @@ static inline void update256(u256 *restrict oPoint) {
     u256 a4 = u256_shl(o, 3);
     u256 a5 = u256_shl(o, 4);
 
-    *oPoint = ((a1 & a2) ^ (a1 & a3) ^ (a1 & a4) ^ (a1 & a5)) | (~a1 & ((a3 & a2) ^ (a4 & a2) ^ (a4 & a3) ^ (a4 & a5) ^ (a5 & a2) ^ (a5 & a3) ^ (a4 & a3 & a2) ^ (a4 & a5 & a2) ^ (a4 & a5 & a3) ^ (a5 & a3 & a2) ^ (a4 & a5 & a3 & a2)));
+    *oPoint = (a2 & a1) ^ (a3 & (a1 | a2)) ^ (a4 & (a1 | a2 | a3)) ^ (a5 & (a1 | a2 | a3 | a4));
 }
 
 
@@ -387,7 +387,7 @@ inline u256 u256_shr_ctz_bits(const u256 x)
 
 
 #define DEBUG 1
-#define PRINTIF_CONDITION_VALUE 8200
+#define PRINTIF_CONDITION_VALUE 1198059
 #define PRINTIF_CONDITION n == PRINTIF_CONDITION_VALUE
 
 #if DEBUG
@@ -475,6 +475,8 @@ u256 canonicalize_horizontally_repeating_solutions(ulong n, u256 oOrig) {
                 }
 
     */
+
+    return oOrig;
 
     PRINTIF("STARTING canonicalize_horizontally_repeating_solutions\n");
     u256 o = oOrig;
@@ -634,9 +636,9 @@ __kernel void search_matches(const ulong min_i,
             // width exceeded
             PRINTIF("1.2.0 (width exceeded at step %lu)\n", count);
             o = oStart;
-            if (count > sss_steps + 1) {
-                PRINTIF("1.2.1 (backtracking and running for %lu steps)\n", count - sss_steps - 1);
-                RUN(count - sss_steps - 1);
+            if (count > sss_steps + 3) {
+                PRINTIF("1.2.1 (backtracking and running for %lu steps)\n", count - sss_steps - 3);
+                RUN(count - sss_steps - 3);
             }
         } else {
             // unfinished
@@ -676,9 +678,9 @@ __kernel void search_matches(const ulong min_i,
                     PRINTIF("1.3.3 (width exceeded)\n");
                     
                     o = oStart;
-                    if (totalcount > sss_steps + 1) {
+                    if (totalcount > sss_steps + 3) {
                         // backtrack to find the best possible cantidate
-                        ulong backtracking_steps = totalcount - sss_steps - 1;
+                        ulong backtracking_steps = totalcount - sss_steps - 3;
                         
                         PRINTIF("1.3.3.1 (count: %lu, totalcount: %lu, backtracking_steps: %lu)\n  o_before: ", count, totalcount, backtracking_steps);
                         PRINTIF256(o);

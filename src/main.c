@@ -160,24 +160,35 @@ static void print_build_log(cl_program program, cl_device_id device) {
 }
 
 #define KERNELFILE "kernels/kernel.cl"
-int main(void) {
-    cl_int err;
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <uint64_t min> <uint64_t max>\n", argv[0]);
+        return 1;
+    }
+    char *endptr;
 
     const uint64_t thousand = 1000ULL;
     const uint64_t million = 1000ULL * thousand;
     const uint64_t billion = 1000ULL * million;
     const uint64_t trillion = 1000ULL * billion;
 
-    // const uint64_t min = 5230000000000UL;
-    // const uint64_t max = 5240000000000UL;
+    uint64_t min = strtoull(argv[1], &endptr, 10);
+    if (*endptr != '\0') {
+        fprintf(stderr, "Invalid first number: %s\n", argv[1]);
+        return 1;
+    }
 
-    const uint64_t min = 0;
-    const uint64_t max = million;
+    uint64_t max = strtoull(argv[2], &endptr, 10);
+    if (*endptr != '\0') {
+        fprintf(stderr, "Invalid second number: %s\n", argv[2]);
+        return 1;
+    }
 
     // Maximum number to be retured
-    const uint64_t max_matches = 100 * million;
+    const uint64_t max_matches = (max - min) / 10;
     fprintf(stderr, "allocating %lu (%lu Mb) for buffer\n", max_matches, max_matches * 8 / million);
 
+    cl_int err;
     cl_uint num_platforms = 0;
     err = clGetPlatformIDs(0, NULL, &num_platforms);
     CHECK_CL(err, "clGetPlatformIDs count");

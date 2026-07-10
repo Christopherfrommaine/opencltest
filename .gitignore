@@ -1,3 +1,7 @@
 out*.txt
 matches_raw.bin
 main
+
+build.nb
+build2.nb
+build3.nb

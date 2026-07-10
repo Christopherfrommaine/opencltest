@@ -7,4 +7,4 @@
 module load cuda
 
 make
-./main > out.txt 2> >(tee out_err.txt >&2)
+./main $1 $2 > out.txt 2> >(tee out_err.txt >&2)
