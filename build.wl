@@ -420,8 +420,7 @@ shellfile=OpenWrite[nbd<>"run_in_env.sh", PageWidth->Infinity];
 WriteString[shellfile, shellscript];
 Close[shellfile];
 
-res=TimeConstrained[RunProcess[{"bash", "-l", nbd<>"run_in_env.sh"}], timeout, $TimedOut];
-Print[InputForm[res]];
+res=TimeConstrained[stdout=RunProcess[{"bash", "-l", nbd<>"run_in_env.sh"}], timeout, $TimedOut];
 If[res===$TimedOut, Return[$TimedOut]];
 
 ConvertFromPackedInt[n_Integer]:=FromDigits[FromDigits[#, 2]&/@Partition[IntegerDigits[n, 2, 256], bits], k];
