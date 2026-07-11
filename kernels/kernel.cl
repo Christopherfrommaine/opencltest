@@ -275,7 +275,7 @@ static inline void update256(u256 *restrict oPoint) {
     u256 a4 = u256_shl(o, 3);
     u256 a5 = u256_shl(o, 4);
 
-    *oPoint = (a2 & a1) ^ (a3 & (a1 | a2)) ^ (a4 & (a1 | a2 | a3)) ^ (a5 & (a1 | a2 | a3 | a4));
+    *oPoint = (a2 & (a1 ^ (a3 & ((a1 & (a4 ^ ~a5)) ^ (~a4 | a5))) ^ ~a4)) ^ (a4 & ~a5) ^ (~(a1 & a4) & (a1 | a4 | a5) & a3);
 }
 
 

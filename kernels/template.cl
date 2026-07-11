@@ -300,8 +300,7 @@ if (depth && stack_ptr < STACK_SIZE) { \
 } else { \
     ulong idx = atomic_inc(match_count); \
     if (idx <= max_matches) { \
-        u256 minim_canonical = canonicalize_horizontally_repeating_solutions(n, minim); \
-        ulong unpacked = from_packed_integer_radix(minim_canonical); \
+        ulong unpacked = from_packed_integer_radix(minim); \
         if (unpacked) { \
             PRINTIF("  - returning 1: %lu\n", unpacked); \
             matches[idx] = unpacked; \
